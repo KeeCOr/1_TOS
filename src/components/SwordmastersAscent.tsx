@@ -1,0 +1,1712 @@
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  ActionType, SubAction, Character, FloatingText, GamePhase,
+  Equipment, Item, MagicSpell, CombatStep, MatchQuality, EnemyIntent, TurnResult, DiceResult,
+  FloorGhosts,
+  SUB_ACTIONS, SUB_ACTION_INFO, PERFECT_COUNTER,
+  generateEnemyIntent, resolveTurn, generateEnemy, createPlayer,
+  EQUIPMENT_POOL, TITLES_DATA, DEFAULT_ACTION_WEIGHTS, DICE_FACE,
+  DISTANCE_LABELS, DISTANCE_COLORS, distanceBonus, getEffectiveStats, getStaminaDelta,
+  getMagicCostByProgress, getMagicCooldownByProgress, getMagicRegenByProgress,
+  COMBAT_ROW_DEFAULT, COMBAT_ROW_MIN, COMBAT_ROW_MAX,
+  CONDITION_LABELS, CONDITION_COLORS, rollCondition,
+} from '@/lib/gameData';
+
+// ── 저장 슬롯 (3개) ───────────────────────────────────────────
+const SAVE_SLOT_KEYS = [
+  'swordmasters-ascent-save-1',
+  'swordmasters-ascent-save-2',
+  'swordmasters-ascent-save-3',
+] as const;
+const FLOOR_GHOST_KEY = 'swordmasters-floor-ghosts';
+const TUTORIAL_KEY    = 'swordmasters-ascent-tutorial-done';
+const HIGH_SCORE_KEY  = 'swordmasters-ascent-highscore';
+
+function loadHighScore(): number {
+  if (typeof window === 'undefined') return 0;
+  return parseInt(localStorage.getItem(HIGH_SCORE_KEY) ?? '0', 10) || 0;
+}
+function saveHighScore(score: number) {
+  if (typeof window === 'undefined') return;
+  const prev = loadHighScore();
+  if (score > prev) localStorage.setItem(HIGH_SCORE_KEY, String(score));
+}
+
+export interface SaveState {
+  phase: GamePhase;
+  floor: number;
+  highScore: number;
+  timestamp: number;
+  playerPos: number;
+  enemyPos:  number;
+  playerRow?: number;
+  enemyRow?:  number;
+  distance?: number; // legacy field, ignored on load
+  magicCooldown: number;
+  combatStep: CombatStep;
+  player: Character;
+  enemy: Character;
+  intent: EnemyIntent | null;
+  stats: { floorsCleared:number; bossesKilled:number; perfectBlocks:number };
+  logs: string[];
+  legacy: Character[];
+}
+
+type SlotMeta = { floor: number; timestamp: number; playerName: string } | null;
+
+function saveGameSlot(slotIndex: number, state: SaveState) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(SAVE_SLOT_KEYS[slotIndex], JSON.stringify(state));
+}
+
+function loadGameSlot(slotIndex: number): SaveState | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(SAVE_SLOT_KEYS[slotIndex]);
+    if (!raw) return null;
+    return JSON.parse(raw) as SaveState;
+  } catch { return null; }
+}
+
+function clearGameSlot(slotIndex: number) {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(SAVE_SLOT_KEYS[slotIndex]);
+}
+
+function getAllSlotMetas(): SlotMeta[] {
+  return [0, 1, 2].map(i => {
+    const s = loadGameSlot(i);
+    if (!s) return null;
+    return { floor: s.floor, timestamp: s.timestamp ?? 0, playerName: s.player?.name ?? '검사' };
+  });
+}
+
+// ── 층별 유령 ─────────────────────────────────────────────────
+function loadFloorGhosts(): FloorGhosts {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(FLOOR_GHOST_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as FloorGhosts;
+  } catch { return {}; }
+}
+
+function saveFloorGhosts(ghosts: FloorGhosts) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(FLOOR_GHOST_KEY, JSON.stringify(ghosts));
+}
+
+function addFloorGhost(targetFloor: number, player: Character) {
+  const ghosts = loadFloorGhosts();
+  const ghostChar: Character = {
+    ...player,
+    id: `ghost_f${targetFloor}_${Date.now()}`,
+    name: `${player.name}의 유령`,
+    isLegacy: true,
+    hp: player.maxHp,
+    mp: player.maxMp,
+    stamina: player.maxStamina,
+    life: 3,
+    maxLife: 3,
+  };
+  const existing = ghosts[targetFloor] ?? [];
+  ghosts[targetFloor] = [...existing.slice(-4), ghostChar]; // 층당 최대 5개
+  saveFloorGhosts(ghosts);
+}
+
+
+// ════════════════════════════════════════════════════════════
+// Utility
+// ════════════════════════════════════════════════════════════
+
+function HpBar({ cur, max, color }: { cur: number; max: number; color: 'red' | 'blue' }) {
+  const pct = Math.max(0, Math.min(100, (cur / max) * 100));
+  return (
+    <div className="w-full h-3 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
+      <div className={`h-full rounded-full transition-all duration-500 ${
+        color === 'red' ? 'bg-gradient-to-r from-red-900 to-red-500' : 'bg-gradient-to-r from-blue-900 to-blue-400'
+      }`} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
+
+function StaminaBar({ cur, max, label = true }: { cur: number; max: number; label?: boolean }) {
+  const pct = max > 0 ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
+  const barColor = pct > 55
+    ? 'bg-gradient-to-r from-yellow-700 to-yellow-400'
+    : pct > 25
+    ? 'bg-gradient-to-r from-orange-700 to-orange-500'
+    : 'bg-gradient-to-r from-red-800 to-red-500';
+  return (
+    <div className="flex items-center gap-1.5">
+      {label && <span className="text-[9px] text-yellow-600 shrink-0">⚡</span>}
+      <div className="flex-1 h-2 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
+        <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+          style={{ width: `${pct}%` }} />
+      </div>
+      {label && <span className="text-[9px] text-yellow-700 shrink-0 tabular-nums">{cur}</span>}
+    </div>
+  );
+}
+
+
+function FloatingLayer({ texts, side }: { texts: FloatingText[]; side: 'player' | 'enemy' }) {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {texts.filter(t => t.side === side).map(ft => (
+        <div key={ft.id} className={`absolute animate-bounce-up font-bold drop-shadow-lg select-none
+          ${side === 'enemy' ? 'right-6 top-8' : 'left-6 top-8'}
+          ${ft.type === 'critical' ? 'text-yellow-300 text-xl' :
+            ft.type === 'damage'   ? 'text-red-400 text-base' :
+            ft.type === 'heal'     ? 'text-green-400 text-base' : 'text-white text-sm'}`}>
+          {ft.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// BattleGrid — 5×5 전투판 + 캐릭터 상태 + 적 능력치 통합
+// ════════════════════════════════════════════════════════════
+
+// 행 기본값은 gameData의 COMBAT_ROW_DEFAULT(2) 사용
+
+function BattleGrid({
+  playerPos, enemyPos, playerRow, enemyRow, playerMain, playerWeaponRange, enemy, player, floatingTexts,
+}: {
+  playerPos: number; enemyPos: number;
+  playerRow: number; enemyRow: number;
+  playerMain: ActionType | null;
+  playerWeaponRange: number;
+  enemy: Character;
+  player: Character;
+  floatingTexts: FloatingText[];
+}) {
+  const distance    = enemyPos - playerPos;
+  const label       = DISTANCE_LABELS[distance] ?? `거리 ${distance}`;
+  const distCol     = DISTANCE_COLORS[distance]  ?? 'text-gray-400';
+  const inRange     = distance <= playerWeaponRange;
+  const pBonus      = playerMain ? distanceBonus(playerMain, distance) : null;
+  const playerStats = getEffectiveStats(player);
+  const enemyStats  = getEffectiveStats(enemy);
+  const elColors    = ['bg-red-600','bg-blue-600','bg-green-600','bg-yellow-600','bg-purple-700'];
+  const elVals      = [
+    enemyStats.elements.fire, enemyStats.elements.water, enemyStats.elements.wind,
+    enemyStats.elements.earth, enemyStats.elements.dark,
+  ];
+
+  return (
+    <div className="px-3 pt-3 pb-2 bg-gray-950 border-b border-gray-800">
+
+      {/* ── 상단 상태 행: 플레이어 | 거리 | 적 + 능력치 ── */}
+      <div className="flex items-start gap-2 mb-3">
+
+        {/* 플레이어 */}
+        <div className="flex-1 space-y-1 min-w-0">
+          <div className="flex items-center gap-1 mb-0.5">
+            <span className="text-[9px] text-blue-300 font-bold truncate">나 ({player.name})</span>
+            <span className="text-[9px] text-gray-400 ml-auto tabular-nums">{player.hp}/{player.maxHp}</span>
+          </div>
+          <HpBar cur={player.hp} max={player.maxHp} color="red" />
+          <HpBar cur={player.mp} max={player.maxMp} color="blue" />
+          <StaminaBar cur={player.stamina} max={player.maxStamina} />
+          <div className="flex items-center gap-1 pt-0.5">
+            {player.condition && (
+              <span className={`text-[9px] font-bold px-1 rounded bg-gray-800/60 ${CONDITION_COLORS[player.condition]}`}>
+                {CONDITION_LABELS[player.condition]}
+              </span>
+            )}
+            <span className="text-[9px] text-gray-500 ml-auto tabular-nums">💪{getEffectiveStats(player).strength} 👣{getEffectiveStats(player).agility}</span>
+          </div>
+        </div>
+
+        {/* 중앙: 거리 */}
+        <div className="flex flex-col items-center shrink-0 gap-1 min-w-[60px]">
+          <span className={`text-xs font-bold ${distCol}`}>{label}</span>
+          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${inRange ? 'bg-green-900/60 text-green-400' : 'bg-red-900/60 text-red-400'}`}>
+            {inRange ? '✓ 사정거리' : '⚠ 초과'}
+          </span>
+          {pBonus !== null && pBonus !== 1.0 && (
+            <span className={`text-[9px] font-bold px-1 rounded ${pBonus > 1 ? 'text-green-400 bg-green-900/40' : 'text-red-400 bg-red-900/40'}`}>
+              {pBonus > 1 ? `+${Math.round((pBonus-1)*100)}%` : `${Math.round((pBonus-1)*100)}%`}
+            </span>
+          )}
+        </div>
+
+        {/* 적 상태 + 능력치 */}
+        <div className="flex-1 space-y-1 min-w-0">
+          <div className="flex items-center gap-1 mb-0.5">
+            <span className="text-[9px] text-red-300 truncate font-bold">{enemy.name}</span>
+            <span className="text-[9px] text-red-400 ml-auto tabular-nums">{enemy.hp}/{enemy.maxHp}</span>
+          </div>
+          <HpBar cur={enemy.hp} max={enemy.maxHp} color="red" />
+          <HpBar cur={enemy.mp} max={enemy.maxMp} color="blue" />
+          <StaminaBar cur={enemy.stamina} max={enemy.maxStamina} />
+          {/* 스탯 비교 */}
+          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] pt-0.5">
+            <span className={enemyStats.strength > playerStats.strength ? 'text-red-400' : 'text-green-400'}>
+              💪 {enemyStats.strength}<span className="text-gray-600"> / {playerStats.strength}</span>
+            </span>
+            <span className={enemyStats.agility > playerStats.agility ? 'text-red-400' : 'text-green-400'}>
+              👣 {enemyStats.agility}<span className="text-gray-600"> / {playerStats.agility}</span>
+            </span>
+            <span className="text-gray-500">🛡️{enemyStats.armor}%</span>
+            {enemy.condition && (
+              <span className={`font-bold px-0.5 rounded bg-gray-800/60 ${CONDITION_COLORS[enemy.condition]}`}>
+                {CONDITION_LABELS[enemy.condition]}
+              </span>
+            )}
+          </div>
+          {/* 속성 */}
+          <div className="flex gap-0.5">
+            {elVals.map((v, i) => v > 0 ? (
+              <span key={i} className={`${elColors[i]} rounded px-1 text-[8px] text-white font-bold`}>{v}</span>
+            ) : null)}
+          </div>
+          {/* 특수 능력 */}
+          {enemy.abilities && enemy.abilities.length > 0 && (
+            <div className="text-[8px] text-yellow-600 leading-tight">
+              {enemy.abilities.map(a => `• ${a.name}`).join(' ')}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 행 상태 배지 ── */}
+      <div className={`text-center text-[10px] font-bold mb-1 py-0.5 rounded transition-all duration-300 ${
+        playerRow === enemyRow
+          ? 'text-yellow-300 bg-yellow-900/30 border border-yellow-700/50'
+          : 'text-green-300 bg-green-900/30 border border-green-700/50'
+      }`}>
+        {playerRow === enemyRow
+          ? '⚔ 같은 행 — 정면 대치'
+          : '↕ 다른 행 — 위치 분리'}
+      </div>
+
+      {/* ── 3×5 그리드 (행 1-3) ── */}
+      <div className="relative flex flex-col gap-1">
+        {[1, 2, 3].map(rowIdx => {
+          const rowLabel = rowIdx === 1 ? '상' : rowIdx === 2 ? '중' : '하';
+          const isPlayerRow = rowIdx === playerRow;
+          const isEnemyRow  = rowIdx === enemyRow;
+          const rowMismatch = playerRow !== enemyRow;
+          return (
+            <div key={rowIdx} className={`flex gap-1 items-center rounded transition-all duration-300 ${
+              isPlayerRow && isEnemyRow ? 'bg-purple-900/10'
+              : isPlayerRow ? 'bg-blue-900/10'
+              : isEnemyRow  ? 'bg-red-900/10'
+              : ''
+            }`}>
+              {/* 행 라벨 */}
+              <div className="w-6 shrink-0 text-[9px] font-bold text-center leading-none py-1">
+                {isPlayerRow && isEnemyRow
+                  ? <span className="text-purple-400">⚡</span>
+                  : isPlayerRow
+                  ? <span className="text-blue-400 flex flex-col items-center gap-0"><span>🛡</span><span className="text-[7px]">{rowLabel}</span></span>
+                  : isEnemyRow
+                  ? <span className="text-red-400 flex flex-col items-center gap-0"><span>⚔</span><span className="text-[7px]">{rowLabel}</span></span>
+                  : <span className="text-gray-700">{rowLabel}</span>}
+              </div>
+              {[1, 2, 3, 4, 5].map(pos => {
+                const isPlayer = isPlayerRow && pos === playerPos;
+                const isEnemy  = isEnemyRow  && pos === enemyPos;
+                const isInRange = isEnemyRow && !isPlayer && !isEnemy
+                                  && pos > playerPos && pos <= playerPos + playerWeaponRange
+                                  && !rowMismatch;
+                return (
+                  <div key={pos}
+                    className={`
+                      flex-1 flex items-center justify-center rounded-lg border
+                      transition-all duration-300 select-none
+                      h-12
+                      ${isPlayer   ? 'bg-blue-900/70 border-blue-400 shadow-[0_0_16px_rgba(59,130,246,0.55)]'
+                      : isEnemy    ? 'bg-red-900/70  border-red-400  shadow-[0_0_16px_rgba(239,68,68,0.55)]'
+                      : isInRange  ? 'bg-green-950/50 border-green-700/60'
+                      : isPlayerRow? 'bg-blue-900/20  border-blue-900/40'
+                      : isEnemyRow ? 'bg-red-900/20   border-red-900/40'
+                      :              'bg-gray-900/20  border-gray-800/25'}
+                    `}>
+                    {isPlayer ? (
+                      <span className="text-2xl drop-shadow-lg leading-none">🛡️</span>
+                    ) : isEnemy ? (
+                      <span className="text-2xl drop-shadow-lg leading-none">{enemy.isLegacy ? '👻' : '⚔️'}</span>
+                    ) : isPlayerRow || isEnemyRow ? (
+                      <span className="text-[9px] font-bold text-gray-600">{pos}</span>
+                    ) : (
+                      <span className="text-[7px] text-gray-800">·</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+
+        {/* 플로팅 데미지 */}
+        <FloatingLayer texts={floatingTexts} side="player" />
+        <FloatingLayer texts={floatingTexts} side="enemy" />
+      </div>
+
+      {/* 위치 화살표 */}
+      <div className="flex items-center justify-center gap-1 mt-1.5 text-[9px] text-gray-600">
+        <span className="text-blue-700">🛡️ {playerPos}</span>
+        <span className="flex-1 text-center tracking-widest">{'─'.repeat(Math.max(0, distance))}▶ 거리 {distance}</span>
+        <span className="text-red-700">{enemyPos} ⚔️</span>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Animated Dice — requirement #2
+// ════════════════════════════════════════════════════════════
+
+function AnimatedDie({
+  finalValue, rolling, delay = 0, isKept, isSumMode,
+}: {
+  finalValue: number; rolling: boolean; delay?: number;
+  isKept: boolean; isSumMode: boolean;
+}) {
+  const [display, setDisplay] = useState(finalValue);
+
+  useEffect(() => {
+    if (!rolling) { setDisplay(finalValue); return; }
+    let elapsed = 0;
+    const iv = setInterval(() => {
+      setDisplay(Math.floor(Math.random() * 6) + 1);
+      elapsed += 80;
+      if (elapsed >= 1200 + delay) {
+        clearInterval(iv);
+        setDisplay(finalValue);
+      }
+    }, 80);
+    return () => clearInterval(iv);
+  }, [rolling, finalValue, delay]);
+
+  const glowClass = isSumMode && finalValue >= 4
+    ? 'text-yellow-300 drop-shadow-[0_0_10px_rgba(250,204,21,0.9)] scale-125'
+    : isKept && !isSumMode
+    ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)] scale-110'
+    : 'text-gray-500 scale-90 opacity-60';
+
+  return (
+    <span className={`text-3xl transition-all duration-300 inline-block ${glowClass}`}>
+      {DICE_FACE[display] ?? '⚀'}
+    </span>
+  );
+}
+
+function DiceRow({
+  dr, rolling, label, labelColor,
+}: {
+  dr: DiceResult; rolling: boolean;
+  label: string; labelColor: string;
+}) {
+  const isSumMode = dr.mode === 'sum';
+  return (
+    <div className="bg-gray-950 rounded-lg p-2 border border-gray-800">
+      <div className="flex items-center justify-between mb-1">
+        <span className={`text-xs font-bold ${labelColor}`}>{label} ×{dr.diceCount}</span>
+        {isSumMode ? (
+          <span className="text-[10px] bg-yellow-800/60 text-yellow-300 px-1.5 rounded font-bold">
+            🔥 합산 크리티컬
+          </span>
+        ) : (
+          <span className="text-[10px] text-gray-500">최고값 사용</span>
+        )}
+      </div>
+      <div className="flex gap-1.5 justify-center flex-wrap">
+        {dr.rolls.map((v, i) => (
+          <AnimatedDie
+            key={i}
+            finalValue={v}
+            rolling={rolling}
+            delay={i * 120}
+            isKept={v === dr.kept}
+            isSumMode={isSumMode}
+          />
+        ))}
+      </div>
+      <div className="text-center text-xs mt-1">
+        {isSumMode ? (
+          <span className="text-yellow-400 font-bold">합계: {dr.sum}</span>
+        ) : (
+          <span className="text-yellow-400 font-bold">최고: {dr.kept}</span>
+        )}
+        <span className="text-gray-600 ml-1">({dr.diceCount}개 중)</span>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Stat Roll Screen — requirement #3
+// ════════════════════════════════════════════════════════════
+
+const STAT_KEYS = ['strength', 'agility', 'armor', 'critChance'] as const;
+const STAT_LABELS: Record<string, string> = {
+  strength: '💪 힘', agility: '👣 민첩', armor: '🛡️ 방어율', critChance: '🗡️ 치명타',
+};
+
+function StatRollScreen({ onComplete, highScore, playerName }: {
+  onComplete: (p: Character) => void; highScore: number; playerName: string;
+}) {
+  const playerRef = useRef(createPlayer(highScore, playerName));
+  const finalRef  = useRef(playerRef.current.stats);
+
+  const [display, setDisplay] = useState({ strength:0, agility:0, armor:0, critChance:0 });
+  const [done, setDone]       = useState(false);
+
+  useEffect(() => {
+    let frame = 0;
+    const FRAMES = 25;
+    const iv = setInterval(() => {
+      frame++;
+      if (frame < FRAMES) {
+        setDisplay({
+          strength:  Math.floor(Math.random() * 50) + 5,
+          agility:   Math.floor(Math.random() * 40) + 5,
+          armor:     Math.floor(Math.random() * 40),
+          critChance: Math.floor(Math.random() * 30),
+        });
+      } else {
+        clearInterval(iv);
+        setDisplay({
+          strength:   finalRef.current.strength,
+          agility:    finalRef.current.agility,
+          armor:      finalRef.current.armor,
+          critChance: finalRef.current.critChance,
+        });
+        setDone(true);
+        setTimeout(() => onComplete(playerRef.current), 1200);
+      }
+    }, 70);
+    return () => clearInterval(iv);
+  }, [onComplete]);
+
+  return (
+    <div className="flex flex-col items-center gap-6 p-8 bg-gray-950 text-white rounded-lg min-h-[400px] justify-center">
+      <div className="text-5xl">{done ? '⚔️' : '🎲'}</div>
+      <h2 className="text-2xl font-bold text-yellow-400">능력치 분배</h2>
+      <p className="text-gray-500 text-sm">
+        {done ? '✓ 확정! 전투 시작...' : '랜덤 분배 중...'}
+      </p>
+      <div className="grid grid-cols-2 gap-4 w-full max-w-xs">
+        {STAT_KEYS.map(k => {
+          const v = display[k as keyof typeof display];
+          const final = finalRef.current[k as keyof typeof finalRef.current];
+          const isSettled = done;
+          return (
+            <div key={k} className={`bg-gray-800 rounded-lg p-3 border transition-all duration-300 ${
+              isSettled ? 'border-yellow-600' : 'border-gray-700'
+            }`}>
+              <div className="text-[11px] text-gray-400">{STAT_LABELS[k]}</div>
+              <div className={`text-2xl font-bold transition-all duration-200 tabular-nums ${
+                isSettled ? 'text-yellow-300' : 'text-white'
+              }`}>
+                {typeof v === 'number' ? v : (final as number)}
+                {isSettled && <span className="text-xs text-green-400 ml-1">✓</span>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {highScore > 0 && (
+        <p className="text-gray-600 text-xs">최고 기록 보너스 +{Math.floor(highScore * 0.1)} 적용됨</p>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Enemy Intent Panel
+// ════════════════════════════════════════════════════════════
+
+const ACTION_ICONS: Record<ActionType, string> = {
+  '공격': '⚔️', '방어': '🛡️', '이동': '👣', '마법 사용': '✨', '아이템 사용': '🎒',
+};
+const QUALITY_COLOR: Record<MatchQuality, string> = {
+  perfect: 'text-yellow-300', partial: 'text-blue-300', miss: 'text-red-400',
+};
+const QUALITY_LABEL: Record<MatchQuality, string> = {
+  perfect: '완벽 대응!', partial: '부분 대응', miss: '실패',
+};
+
+// ════════════════════════════════════════════════════════════
+// Sub-action Panel
+// ════════════════════════════════════════════════════════════
+
+// 이동 방향 아이콘 (그리드 이동 시각화)
+const MOVE_DIR_ICON: Partial<Record<SubAction, string>> = {
+  '전진 압박': '▶',
+  '후퇴':       '◀',
+  '위로 이동':  '▲',
+  '아래로 이동':'▼',
+};
+
+function SubActionPanel({ playerMain, intent, onSelect, playerMagicSlots, playerInventory, playerPos, playerRow, enemyPos, enemyRow, distance }: {
+  playerMain: ActionType; intent: EnemyIntent; onSelect: (s: SubAction) => void;
+  playerMagicSlots?: MagicSpell[];
+  playerInventory?: Item[];
+  playerPos?: number;
+  playerRow?: number;
+  enemyPos?: number;
+  enemyRow?: number;
+  distance?: number;
+}) {
+  const allOptions: SubAction[] =
+    playerMain === '마법 사용' && playerMagicSlots && playerMagicSlots.length > 0
+      ? playerMagicSlots
+      : playerMain === '아이템 사용' && playerInventory
+      ? playerInventory.map(it => it.name as SubAction)
+      : (SUB_ACTIONS[playerMain] ?? []) as SubAction[];
+
+  // 이동 시 공간 없으면 해당 방향 비활성화
+  const isPlayerDisabled = (sub: SubAction): boolean => {
+    if (playerMain !== '이동') return false;
+    if (sub === '후퇴'        && (playerPos ?? 2) <= 1) return true;
+    if (sub === '전진 압박'   && (distance ?? 3) <= 1) return true;
+    if (sub === '위로 이동'   && (playerRow ?? 2) <= COMBAT_ROW_MIN) return true;
+    if (sub === '아래로 이동' && (playerRow ?? 2) >= COMBAT_ROW_MAX) return true;
+    return false;
+  };
+
+  // 적의 이동 가능 여부 (위치 경계 기반)
+  const isEnemySubImpossible = (sub: SubAction): boolean => {
+    if (intent.mainAction !== '이동') return false;
+    const ep = enemyPos ?? 4;
+    const er = enemyRow ?? COMBAT_ROW_DEFAULT;
+    if (sub === '전진 압박'   && ep <= 1) return true;
+    if (sub === '후퇴'        && ep >= 5) return true;
+    if (sub === '위로 이동'   && er <= COMBAT_ROW_MIN) return true;
+    if (sub === '아래로 이동' && er >= COMBAT_ROW_MAX) return true;
+    return false;
+  };
+
+  // 비활성화된 옵션 제외
+  const myOptions = allOptions.filter(sub => !isPlayerDisabled(sub));
+
+  // 불가능한 적 서브 제외 후 확률 재정규화
+  const allEnemySubs = (SUB_ACTIONS[intent.mainAction] as SubAction[]).filter(s => !isEnemySubImpossible(s));
+  const rawTotal = allEnemySubs.reduce((sum, s) => sum + (intent.subProbs[s] ?? 0), 0);
+  const normalizeProb = (p: number) => rawTotal > 0 ? Math.round(p / rawTotal * 100) : 0;
+
+  const likelyEnemySub = allEnemySubs.length > 0
+    ? allEnemySubs.reduce((a, b) => (intent.subProbs[b] ?? 0) > (intent.subProbs[a] ?? 0) ? b : a)
+    : (SUB_ACTIONS[intent.mainAction] as SubAction[])[0];
+  const perfectVsLikely = PERFECT_COUNTER[likelyEnemySub];
+
+  return (
+    <div className="space-y-2">
+      <div className="text-xs text-gray-400 px-1">
+        <span className="text-white font-semibold">{ACTION_ICONS[playerMain]} {playerMain}</span>의 세부 기술 선택
+        <span className="ml-1 text-gray-600">— 적 세부 행동에 맞춰야 완벽!</span>
+      </div>
+      <div className="bg-gray-950 border border-gray-800 rounded p-2 text-[11px]">
+        <div className="text-gray-500 mb-1">적의 자세:</div>
+        {allEnemySubs.map(enemySub => {
+          const rawProb = intent.subProbs[enemySub] ?? 0;
+          const prob = normalizeProb(rawProb);
+          const hint = SUB_ACTION_INFO[enemySub]?.hint ?? '';
+          return (
+            <div key={enemySub} className="flex items-center gap-2 py-0.5">
+              <div className="w-14 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-full bg-orange-600 rounded-full" style={{ width: `${prob}%` }} />
+              </div>
+              <span className="text-gray-400 flex-1">{hint}</span>
+              <span className="text-gray-600 text-[10px]">{prob}%</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        {myOptions.map(sub => {
+          const info = SUB_ACTION_INFO[sub];
+          const isPerfect = sub === perfectVsLikely;
+          const dirIcon = MOVE_DIR_ICON[sub];
+          return (
+            <button key={sub} onClick={() => onSelect(sub)}
+              className={`relative flex flex-col items-center py-2 px-1 rounded-lg border text-center
+                transition-all active:scale-95 cursor-pointer text-xs font-semibold
+                ${isPerfect
+                  ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300 hover:bg-yellow-900/60'
+                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'}`}>
+              {isPerfect && (
+                <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[9px] bg-yellow-600 text-black px-1 rounded font-bold">권장</span>
+              )}
+              {dirIcon && (
+                <span className={`text-lg leading-none mt-0.5 ${
+                  dirIcon === '▶' ? 'text-green-400' : dirIcon === '◀' ? 'text-orange-400' : 'text-blue-400'
+                }`}>{dirIcon}</span>
+              )}
+              <span className={`mt-0.5 ${dirIcon ? 'text-[11px]' : 'text-sm mt-1'}`}>{sub}</span>
+              <span className="text-[10px] text-gray-500 mt-0.5">{info.desc}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Dice Panel (with rolling state) — requirement #2
+// ════════════════════════════════════════════════════════════
+
+function DicePanel({ result, rolling, playerName, enemyName }: {
+  result: TurnResult; rolling: boolean;
+  playerName: string; enemyName: string;
+}) {
+  const qualityColor = QUALITY_COLOR[result.quality];
+  const qualityLabel = QUALITY_LABEL[result.quality];
+
+  return (
+    <div className="space-y-3">
+      {!rolling && (
+        <div className={`text-center font-bold text-lg ${qualityColor}`}>
+          {result.quality === 'perfect' ? '🌟 ' : result.quality === 'partial' ? '✅ ' : '❌ '}
+          {qualityLabel}
+          <span className="text-gray-400 text-xs ml-2 font-normal">{result.message}</span>
+        </div>
+      )}
+      {rolling && (
+        <div className="text-center text-yellow-400 font-bold animate-pulse">🎲 주사위 굴리는 중...</div>
+      )}
+      <div className="grid grid-cols-2 gap-3">
+        <DiceRow dr={result.playerDice} rolling={rolling} label={playerName} labelColor="text-blue-400" />
+        <DiceRow dr={result.enemyDice}  rolling={rolling} label={enemyName}  labelColor="text-red-400" />
+      </div>
+      {!rolling && (
+        <div className="flex justify-center gap-6 text-sm">
+          {result.damageDealt > 0 && (
+            <span>
+              <span className="text-gray-400">적 피해: </span>
+              <span className={`font-bold ${result.isCritical && result.playerDice.mode === 'sum' ? 'text-yellow-300' : 'text-red-400'}`}>
+                {result.damageDealt}{result.isCritical && result.playerDice.mode === 'sum' ? ' 🔥합산!' : ''}
+              </span>
+            </span>
+          )}
+          {result.damageTaken > 0 && (
+            <span>
+              <span className="text-gray-400">내 피해: </span>
+              <span className="font-bold text-orange-400">{result.damageTaken}</span>
+            </span>
+          )}
+          {result.damageDealt === 0 && result.damageTaken === 0 && (
+            <span className="text-gray-500">피해 없음</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Other screens
+// ════════════════════════════════════════════════════════════
+
+function RewardScreen({ floor, enemy, onLoot, onAbsorb, onSkip }: {
+  floor: number; enemy: Character;
+  onLoot: (eq: Equipment) => void; onAbsorb: () => void; onSkip: () => void;
+}) {
+  const [reward] = useState(() => EQUIPMENT_POOL[Math.floor(Math.random() * EQUIPMENT_POOL.length)]);
+  return (
+    <div className="flex flex-col items-center gap-4 p-6 bg-gray-900 rounded-lg min-h-[300px] text-white">
+      <h2 className="text-xl font-bold text-yellow-400">⚔️ {floor}층 클리어!</h2>
+      <div className="flex flex-col gap-3 w-full max-w-xs">
+        <button onClick={() => onLoot(reward)} className="bg-yellow-700 hover:bg-yellow-600 font-bold py-3 px-4 rounded-lg transition-colors">
+          🗡️ 장비: {reward.name}<span className="block text-xs text-yellow-300 mt-1">{reward.description}</span>
+        </button>
+        <button onClick={onAbsorb} className="bg-purple-800 hover:bg-purple-700 font-bold py-3 px-4 rounded-lg transition-colors">
+          💀 능력 흡수 (+STR {Math.floor(enemy.stats.strength * 0.1)}, +AGI {Math.floor(enemy.stats.agility * 0.1)})
+        </button>
+        <button onClick={onSkip} className="bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-4 rounded-lg transition-colors">
+          다음 층으로 →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function GameOverScreen({ floor, onRetry, onWatchAd }: {
+  floor: number; onRetry: () => void; onWatchAd: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-5 p-8 bg-gray-950 text-white rounded-lg min-h-[300px]">
+      <div className="text-5xl">💀</div>
+      <h2 className="text-2xl font-bold text-red-500">패배</h2>
+      <p className="text-gray-400">{floor}층에서 쓰러졌습니다.</p>
+      <div className="flex flex-col gap-3 w-full max-w-xs">
+        <button onClick={onWatchAd} className="bg-green-700 hover:bg-green-600 font-bold py-3 px-4 rounded-lg transition-colors">
+          📺 광고 시청 후 재도전
+        </button>
+        <button onClick={onRetry} className="bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-4 rounded-lg transition-colors">
+          처음부터 시작
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Tutorial Screen
+// ════════════════════════════════════════════════════════════
+
+const TUTORIAL_STEPS = [
+  {
+    title: '검사의 승천에 오신 걸 환영합니다!',
+    icon: '⚔️',
+    body: [
+      '탑을 올라 전설의 검사가 되세요.',
+      '매 층마다 적을 만나 전투를 벌입니다.',
+      '각 턴에서 행동을 선택하고 주사위로 결과가 결정됩니다.',
+    ],
+  },
+  {
+    title: '거리 시스템',
+    icon: '📏',
+    body: [
+      '전투는 1~5의 거리 단계로 이루어집니다.',
+      '밀착(1) ↔ 최원거리(5)로 구분됩니다.',
+      '⚠ 공격은 무기 사정거리 내에서만 명중합니다.',
+      '이동(전진 압박/후퇴/위로 이동/아래로 이동)으로 거리·행을 조절하세요.',
+    ],
+  },
+  {
+    title: '행동 선택',
+    icon: '🎯',
+    body: [
+      '⚔️ 공격 — 사정거리 이내에서만 피해를 줍니다.',
+      '🛡️ 방어 — 적 공격을 막고 반격 기회를 잡습니다.',
+      '👣 이동 — 거리를 조절해 유리한 위치를 선점합니다.',
+      '✨ 마법 — 장거리에 유리, MP가 필요합니다.',
+      '🎒 아이템 — 포션으로 회복하거나 단검을 던집니다.',
+    ],
+  },
+  {
+    title: '세부 기술 & 주사위',
+    icon: '🎲',
+    body: [
+      '행동을 고르면 세부 기술을 추가로 선택합니다.',
+      '적의 세부 기술을 완벽히 카운터하면 퍼펙트 대응!',
+      '주사위 6면이 모두 4 이상이면 합산 크리티컬 🔥',
+      '합산 크리티컬은 최대 2.8배 피해를 줍니다.',
+    ],
+  },
+  {
+    title: '마법 슬롯 시스템',
+    icon: '✨',
+    body: [
+      '게임 시작 시 마법 1개를 랜덤으로 습득합니다.',
+      '적을 처치하면 적의 마법을 흡수할 수 있습니다.',
+      '마법 슬롯은 최대 3개입니다.',
+      '슬롯이 가득 차면 기존 마법과 교체해야 합니다.',
+    ],
+  },
+  {
+    title: '아이템 & 리워드',
+    icon: '🎒',
+    body: [
+      '치유 물약: 소모 후 HP 25 회복 (수량 제한).',
+      '단검 던지기: 거리 4 이내 원거리 공격.',
+      '적 처치 후 장비 획득 / 능력 흡수 / 스킵을 선택합니다.',
+      '생명력(❤️)이 0이 되면 게임 오버입니다.',
+    ],
+  },
+];
+
+function TutorialScreen({ onComplete }: { onComplete: () => void }) {
+  const [step, setStep] = useState(0);
+  const current = TUTORIAL_STEPS[step];
+  const isLast = step === TUTORIAL_STEPS.length - 1;
+
+  return (
+    <div className="flex flex-col min-h-[480px] bg-gray-950 text-white rounded-lg overflow-hidden">
+      {/* Progress bar */}
+      <div className="flex gap-1 p-3 bg-gray-900 border-b border-gray-800">
+        {TUTORIAL_STEPS.map((_, i) => (
+          <div key={i} className={`flex-1 h-1 rounded-full transition-all duration-300 ${i <= step ? 'bg-yellow-400' : 'bg-gray-700'}`} />
+        ))}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8">
+        <div className="text-6xl">{current.icon}</div>
+        <h2 className="text-xl font-bold text-yellow-400 text-center">{current.title}</h2>
+        <ul className="space-y-2 w-full max-w-sm">
+          {current.body.map((line, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+              <span className="text-yellow-600 mt-0.5 shrink-0">▸</span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Navigation */}
+      <div className="flex items-center justify-between p-4 bg-gray-900 border-t border-gray-800 gap-3">
+        <button
+          onClick={() => setStep(s => Math.max(0, s - 1))}
+          disabled={step === 0}
+          className="px-4 py-2 rounded-lg text-sm text-gray-400 border border-gray-700 disabled:opacity-30 hover:bg-gray-800 transition-colors">
+          ← 이전
+        </button>
+        <span className="text-xs text-gray-500">{step + 1} / {TUTORIAL_STEPS.length}</span>
+        {isLast ? (
+          <button onClick={onComplete}
+            className="px-5 py-2 rounded-lg text-sm font-bold bg-red-700 hover:bg-red-600 text-white transition-all hover:scale-105 active:scale-95">
+            게임 시작! ⚔️
+          </button>
+        ) : (
+          <button onClick={() => setStep(s => s + 1)}
+            className="px-4 py-2 rounded-lg text-sm font-bold bg-yellow-700 hover:bg-yellow-600 text-white transition-colors">
+            다음 →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StartScreen({ highScore, onSelectSlot, onNewGame }: {
+  highScore: number;
+  onSelectSlot: (slotIndex: number) => void;
+  onNewGame: (slotIndex: number) => void;
+}) {
+  const [metas, setMetas] = useState<ReturnType<typeof getAllSlotMetas>>([null, null, null]);
+  const [confirm, setConfirm] = useState<{ slot: number; mode: 'delete' | 'new' } | null>(null);
+
+  useEffect(() => { setMetas(getAllSlotMetas()); }, []);
+
+  const fmt = (ts: number) => {
+    if (!ts) return '';
+    const d = new Date(ts);
+    return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  };
+
+  const handleDelete = (i: number) => {
+    clearGameSlot(i);
+    setMetas(prev => { const next = [...prev]; next[i] = null; return next; });
+    setConfirm(null);
+  };
+
+  const handleNewGame = (i: number) => {
+    clearGameSlot(i);
+    setMetas(prev => { const next = [...prev]; next[i] = null; return next; });
+    setConfirm(null);
+    onNewGame(i);
+  };
+
+  return (
+    <div className="flex flex-col items-center min-h-screen text-white"
+      style={{ background: 'linear-gradient(180deg, #08080f 0%, #0f0a18 50%, #100808 100%)' }}>
+
+      {/* 타이틀 섹션 */}
+      <div className="flex flex-col items-center pt-16 pb-8">
+        <div className="text-7xl mb-4" style={{ filter: 'drop-shadow(0 0 16px rgba(251,191,36,0.8))' }}>⚔️</div>
+        <p className="text-yellow-400 text-xs tracking-[0.4em] uppercase mb-2">Tower of Swords</p>
+        <h1 className="text-4xl font-black text-yellow-300 tracking-wider" style={{ textShadow: '0 0 24px rgba(251,191,36,0.5)' }}>
+          검사의 승천
+        </h1>
+        <div className="flex items-center gap-3 mt-5">
+          <div className="h-px w-20 bg-yellow-900" />
+          <span className="text-yellow-600 text-sm">✦</span>
+          <div className="h-px w-20 bg-yellow-900" />
+        </div>
+      </div>
+
+      {/* 설명 & 최고기록 */}
+      <div className="flex flex-col items-center gap-2 mb-8 px-8">
+        <p className="text-gray-300 text-sm text-center leading-relaxed">탑을 올라 전설의 검사가 되어라</p>
+        <p className="text-gray-500 text-xs text-center">거리를 좁히고 · 적의 의도를 꿰뚫어라</p>
+        {highScore > 0 && (
+          <div className="flex items-center gap-2 mt-2 bg-yellow-950 border border-yellow-800 px-4 py-1.5 rounded-full">
+            <span className="text-yellow-400 text-xs">🏆 최고 기록</span>
+            <span className="text-yellow-300 text-sm font-bold">{highScore}층</span>
+          </div>
+        )}
+      </div>
+
+      {/* 슬롯 선택 */}
+      <div className="w-full max-w-xs px-5 flex flex-col gap-3">
+        <div className="flex items-center gap-3 mb-1">
+          <div className="h-px flex-1 bg-gray-700" />
+          <span className="text-gray-400 text-xs tracking-widest uppercase">저장 슬롯</span>
+          <div className="h-px flex-1 bg-gray-700" />
+        </div>
+
+        {[0, 1, 2].map(i => {
+          const meta = metas[i];
+          const isConfirming = confirm?.slot === i;
+
+          return (
+            <div key={i} className="flex flex-col gap-1">
+              {/* 메인 슬롯 버튼 */}
+              <button onClick={() => { setConfirm(null); onSelectSlot(i); }}
+                className="flex items-center justify-between px-4 py-3 rounded-xl border transition-all duration-150 active:scale-95 hover:brightness-125"
+                style={meta ? {
+                  background: 'rgba(30,58,138,0.4)', borderColor: '#3b82f6',
+                } : {
+                  background: 'rgba(31,41,55,0.6)', borderColor: '#374151',
+                }}>
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">{meta ? '💾' : '📂'}</span>
+                  <div className="text-left">
+                    <div className="text-sm font-bold text-white">
+                      슬롯 {i+1}
+                      {meta
+                        ? <span className="ml-2 text-blue-300">{meta.floor}층</span>
+                        : <span className="ml-2 text-gray-400 font-normal">— 비어있음</span>}
+                    </div>
+                    <div className="text-xs mt-0.5">
+                      {meta
+                        ? <span className="text-gray-400">{meta.playerName} · {fmt(meta.timestamp)}</span>
+                        : <span className="text-gray-500">새 게임 시작</span>}
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-sm font-semibold ${meta ? 'text-blue-300' : 'text-gray-400'}`}>
+                  {meta ? '계속 ›' : '시작 ›'}
+                </span>
+              </button>
+
+              {/* 저장 슬롯인 경우: 삭제 / 새로하기 버튼 분리 */}
+              {meta && !isConfirming && (
+                <div className="flex justify-end gap-3 pr-1">
+                  <button onClick={() => setConfirm({ slot: i, mode: 'delete' })}
+                    className="text-[11px] text-gray-600 hover:text-red-400 transition-colors py-0.5">
+                    🗑 삭제
+                  </button>
+                  <button onClick={() => setConfirm({ slot: i, mode: 'new' })}
+                    className="text-[11px] text-gray-500 hover:text-yellow-400 transition-colors py-0.5">
+                    ↺ 새로하기
+                  </button>
+                </div>
+              )}
+
+              {/* 확인 다이얼로그 */}
+              {isConfirming && confirm && (
+                <div className="flex items-center justify-between bg-red-950/60 border border-red-800 rounded-lg px-3 py-2">
+                  <span className="text-xs text-red-300">
+                    {confirm.mode === 'delete' ? '저장 데이터를 삭제할까요?' : '새 게임을 시작할까요? (저장 삭제)'}
+                  </span>
+                  <div className="flex gap-2 ml-2 shrink-0">
+                    <button
+                      onClick={() => confirm.mode === 'delete' ? handleDelete(i) : handleNewGame(i)}
+                      className="text-[11px] bg-red-700 hover:bg-red-600 text-white px-2 py-1 rounded transition-colors font-bold">
+                      {confirm.mode === 'delete' ? '삭제' : '시작'}
+                    </button>
+                    <button onClick={() => setConfirm(null)}
+                      className="text-[11px] text-gray-400 hover:text-white px-2 py-1 rounded transition-colors">
+                      취소
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 하단 버전 */}
+      <div className="mt-auto pb-6 pt-8">
+        <p className="text-gray-600 text-xs text-center tracking-wider">v1.6.0 · 3행 전투 그리드 · 행 이동 회피 시스템</p>
+      </div>
+    </div>
+  );
+}
+
+function BattleLog({ logs }: { logs: string[] }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [logs]);
+  return (
+    <div ref={ref} className="h-20 overflow-y-auto bg-gray-950 border border-gray-800 rounded p-2 text-xs space-y-0.5">
+      {logs.map((l, i) => (
+        <p key={i} className={i === logs.length - 1 ? 'text-white' : 'text-gray-500'}>{l}</p>
+      ))}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Magic Absorb Panel — 마법 슬롯 교체 UI
+// ════════════════════════════════════════════════════════════
+
+function MagicAbsorbPanel({ newSpell, currentSlots, onSwap, onSkip }: {
+  newSpell: MagicSpell;
+  currentSlots: MagicSpell[];
+  onSwap: (index: number) => void;
+  onSkip: () => void;
+}) {
+  const spellEmoji: Record<MagicSpell, string> = {
+    '화염 쇄도': '🔥', '암흑 속박': '🌑', '회복술': '💚', '빙결 창': '❄️',
+  };
+  return (
+    <div className="flex flex-col items-center gap-4 p-6 bg-gray-900 rounded-lg text-white">
+      <div className="text-4xl">{spellEmoji[newSpell] ?? '✨'}</div>
+      <h2 className="text-xl font-bold text-purple-400">✨ 새 마법 흡수 가능!</h2>
+      <div className="w-full max-w-xs bg-purple-900/30 border border-purple-600 rounded-lg p-3 text-center">
+        <div className="text-purple-300 font-bold text-lg">{newSpell}</div>
+        <div className="text-gray-400 text-xs mt-1">{SUB_ACTION_INFO[newSpell]?.desc}</div>
+      </div>
+      <div className="text-yellow-400 text-sm font-bold">슬롯 가득 참 (3/3) — 교체할 슬롯을 선택하세요</div>
+      <div className="flex flex-col gap-2 w-full max-w-xs">
+        {currentSlots.map((spell, i) => (
+          <button key={i} onClick={() => onSwap(i)}
+            className="bg-gray-800 hover:bg-purple-900/50 border border-gray-600 hover:border-purple-500 rounded-lg p-3 text-left transition-all active:scale-95">
+            <div className="flex items-center justify-between">
+              <span className="text-white font-semibold">{spellEmoji[spell] ?? '✨'} 슬롯 {i + 1}: {spell}</span>
+              <span className="text-purple-400 text-xs">교체 →</span>
+            </div>
+            <div className="text-gray-500 text-xs mt-0.5">{SUB_ACTION_INFO[spell]?.desc}</div>
+            <div className="text-purple-300 text-xs mt-1">→ {newSpell}으로 교체</div>
+          </button>
+        ))}
+        <button onClick={onSkip}
+          className="bg-gray-700 hover:bg-gray-600 text-gray-400 py-2 px-4 rounded-lg transition-colors text-sm">
+          흡수 건너뛰기
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// Name Input Screen
+// ════════════════════════════════════════════════════════════
+
+const PRESET_NAMES = ['검사', '기사', '방랑자', '검성', '암살자', '수호자', '전사', '검귀'];
+
+function NameInputScreen({ onComplete }: { onComplete: (name: string) => void }) {
+  const [name, setName] = useState('');
+  const handleConfirm = () => {
+    const trimmed = name.trim();
+    onComplete(trimmed || '검사');
+  };
+  return (
+    <div className="flex flex-col items-center gap-6 p-8 bg-gray-950 text-white rounded-lg min-h-[380px] justify-center">
+      <div className="text-5xl">⚔️</div>
+      <h2 className="text-2xl font-bold text-yellow-400">검사의 이름</h2>
+      <p className="text-gray-500 text-sm text-center">전설에 새겨질 이름을 입력하세요</p>
+      <input
+        type="text"
+        value={name}
+        onChange={e => setName(e.target.value.slice(0, 10))}
+        onKeyDown={e => e.key === 'Enter' && handleConfirm()}
+        placeholder="검사"
+        maxLength={10}
+        autoFocus
+        className="w-full max-w-xs text-center text-xl font-bold bg-gray-800 border-2 border-yellow-700 focus:border-yellow-400 rounded-lg px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-600"
+      />
+      <div className="flex flex-wrap gap-2 justify-center max-w-xs">
+        {PRESET_NAMES.map(n => (
+          <button key={n} onClick={() => setName(n)}
+            className="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-yellow-600 text-gray-300 hover:text-yellow-300 px-3 py-1.5 rounded-lg transition-all">
+            {n}
+          </button>
+        ))}
+      </div>
+      <button onClick={handleConfirm}
+        className="w-full max-w-xs bg-yellow-700 hover:bg-yellow-600 active:scale-95 font-bold py-3 px-6 rounded-lg text-white text-lg transition-all">
+        {name.trim() ? `${name.trim()} 으로 시작` : '검사로 시작'} →
+      </button>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+// ROOT
+// ════════════════════════════════════════════════════════════
+
+export default function SwordmastersAscent() {
+  const [phase, setPhase]       = useState<GamePhase>('start');
+  const [pendingPlayerName, setPendingPlayerName] = useState('검사');
+  const [floor, setFloor]       = useState(1);
+  const [highScore, setHighScore] = useState(() => loadHighScore());
+  const [player, setPlayer]     = useState<Character | null>(null);
+  const [enemy, setEnemy]       = useState<Character | null>(null);
+  const [legacy, setLegacy]     = useState<Character[]>([]);
+  const [logs, setLogs]         = useState<string[]>(['게임을 시작하세요.']);
+  const [floating, setFloating] = useState<FloatingText[]>([]);
+  // 5칸 그리드 위치: 플레이어 1번 칸, 적 4번 칸 → 거리 3
+  const [playerPos, setPlayerPos] = useState(1);
+  const [enemyPos,  setEnemyPos]  = useState(4);
+  // 행(Y축) 위치: 1-3, 기본 2 (중앙)
+  const [playerRow, setPlayerRow] = useState(COMBAT_ROW_DEFAULT);
+  const [enemyRow,  setEnemyRow]  = useState(COMBAT_ROW_DEFAULT);
+  const distance = enemyPos - playerPos;  // 파생값
+  const [magicCooldown, setMagicCooldown] = useState(0);
+  const [activeSaveSlot, setActiveSaveSlot] = useState(-1);
+
+  // combat state
+  const [combatStep, setCombatStep] = useState<CombatStep>('select_main');
+  const [intent, setIntent]         = useState<EnemyIntent | null>(null);
+  const [playerMain, setPlayerMain] = useState<ActionType | null>(null);
+  const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
+  const [diceRolling, setDiceRolling] = useState(false);
+
+  const [stats, setStats] = useState({ floorsCleared:0, bossesKilled:0, perfectBlocks:0 });
+  const [pendingMagicAbsorb, setPendingMagicAbsorb] = useState<MagicSpell | null>(null);
+  const addLog = useCallback((msg: string) => setLogs(p => [...p.slice(-60), msg]), []);
+
+  const showFloat = useCallback((text: string, type: FloatingText['type'], side: FloatingText['side']) => {
+    const id = `${Date.now()}-${Math.random()}`;
+    setFloating(p => [...p, { id, text, type, side }]);
+    setTimeout(() => setFloating(p => p.filter(f => f.id !== id)), 1800);
+  }, []);
+
+  // 저장 데이터를 state에 적용 (슬롯 인덱스를 먼저 set한 뒤 호출)
+  const applyLoadedSave = useCallback((saved: SaveState) => {
+    const safeCombatStep: CombatStep =
+      saved.combatStep === 'rolling' || saved.combatStep === 'result'
+        ? 'select_main' : saved.combatStep;
+    const normalizedPlayer = {
+      ...saved.player,
+      stamina: saved.player.stamina ?? saved.player.maxStamina ?? 40,
+      maxStamina: saved.player.maxStamina ?? 40,
+      magicSlots: Array.isArray(saved.player.magicSlots) ? saved.player.magicSlots : [],
+    };
+    const normalizedEnemy = {
+      ...saved.enemy,
+      stamina: saved.enemy.stamina ?? saved.enemy.maxStamina ?? 30,
+      maxStamina: saved.enemy.maxStamina ?? 30,
+      magicSlots: Array.isArray(saved.enemy.magicSlots) ? saved.enemy.magicSlots : [],
+    };
+    const loadedHighScore = Math.max(loadHighScore(), saved.highScore ?? 0);
+    saveHighScore(loadedHighScore);
+    setHighScore(loadedHighScore);
+    setPhase(saved.phase === 'gameover' || saved.phase === 'start' ? 'stat_roll' : saved.phase);
+    setFloor(saved.floor);
+    // 신규 저장: playerPos/enemyPos 직접 사용. 구 저장: distance로 복원
+    setPlayerPos(saved.playerPos ?? 1);
+    setEnemyPos(saved.enemyPos ?? (1 + (saved.distance ?? 3)));
+    setPlayerRow(saved.playerRow ?? COMBAT_ROW_DEFAULT);
+    setEnemyRow(saved.enemyRow  ?? COMBAT_ROW_DEFAULT);
+    setMagicCooldown(saved.magicCooldown);
+    setCombatStep(safeCombatStep);
+    setPlayer(normalizedPlayer);
+    setEnemy(normalizedEnemy);
+    setIntent(safeCombatStep === 'select_main' && saved.intent ? saved.intent : null);
+    setTurnResult(null);
+    setStats(saved.stats);
+    setLogs(saved.logs.length ? [...saved.logs, '📂 저장된 게임을 불러왔습니다.'] : ['📂 저장된 게임을 불러왔습니다.']);
+    setLegacy(saved.legacy ?? []);
+  }, []);
+
+  // 슬롯 선택: 데이터 있으면 로드, 없으면 이름 입력 → 새 게임
+  const handleSlotSelect = useCallback((slotIndex: number) => {
+    setActiveSaveSlot(slotIndex);
+    const saved = loadGameSlot(slotIndex);
+    if (saved) {
+      applyLoadedSave(saved);
+      return;
+    }
+    setPhase('naming');
+    setFloor(1); setPlayerPos(1); setEnemyPos(4); setMagicCooldown(0); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
+  }, [applyLoadedSave]);
+
+  // 슬롯 새로하기: 저장 삭제 후 이름 입력 → 새 게임
+  const handleNewGame = useCallback((slotIndex: number) => {
+    setActiveSaveSlot(slotIndex);
+    setPlayer(null); setEnemy(null);
+    setPhase('naming');
+    setFloor(1); setPlayerPos(1); setEnemyPos(4); setMagicCooldown(0); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
+  }, []);
+
+  const updateHighScore = useCallback((newFloor: number) => {
+    setHighScore(prev => {
+      const next = Math.max(prev, newFloor);
+      saveHighScore(next);
+      return next;
+    });
+  }, []);
+
+  const saveCurrentGame = useCallback(() => {
+    if (!player || !enemy || phase === 'gameover' || activeSaveSlot < 0) return;
+    const safeCombatStep: CombatStep =
+      combatStep === 'rolling' || combatStep === 'result' ? 'select_main' : combatStep;
+    const state: SaveState = {
+      phase, floor, highScore, timestamp: Date.now(),
+      playerPos, enemyPos, playerRow, enemyRow, magicCooldown,
+      combatStep: safeCombatStep, player, enemy, intent,
+      stats, logs, legacy,
+    };
+    saveGameSlot(activeSaveSlot, state);
+    addLog('💾 게임 저장됨');
+  }, [phase, floor, highScore, playerPos, enemyPos, playerRow, enemyRow, magicCooldown, combatStep, player, enemy, intent, stats, logs, legacy, activeSaveSlot, addLog]);
+
+  // 자동 저장 비활성화 — 수동 저장 버튼으로만 저장됨
+
+  // 게임오버 시 저장 슬롯 삭제
+  useEffect(() => {
+    if (phase === 'gameover' && activeSaveSlot >= 0) {
+      clearGameSlot(activeSaveSlot);
+    }
+  }, [phase, activeSaveSlot]);
+
+  const spawnIntent = useCallback((eng: Character, pRow?: number, eRow?: number, pPos?: number, ePos?: number, pHp?: number, pMaxHp?: number) => {
+    const w = eng.actionWeights ?? DEFAULT_ACTION_WEIGHTS;
+    const ctx = {
+      enemyHp: eng.hp, enemyMaxHp: eng.maxHp,
+      playerHp: pHp ?? 90, playerMaxHp: pMaxHp ?? 90,
+      distance: (ePos ?? 4) - (pPos ?? 1),
+      enemyWeaponRange: eng.weaponRange ?? 1,
+      playerRow: pRow ?? COMBAT_ROW_DEFAULT,
+      enemyRow:  eRow  ?? COMBAT_ROW_DEFAULT,
+      enemyPos:  ePos  ?? 4,
+    };
+    setIntent(generateEnemyIntent(w, ctx));
+    setCombatStep('select_main');
+    setPlayerMain(null);
+    setTurnResult(null);
+    setDiceRolling(false);
+  }, []);
+
+  // ── Auto-advance: result → next turn (req #4) ─────────────
+  useEffect(() => {
+    if (combatStep !== 'result' || !turnResult || !enemy || !player) return;
+    if (enemy.hp <= 0 || player.hp <= 0) return; // handled elsewhere
+    const t = setTimeout(() => {
+      if (enemy.hp > 0 && player && player.hp > 0)
+        spawnIntent(enemy, playerRow, enemyRow, playerPos, enemyPos, player.hp, player.maxHp);
+    }, 2500);
+    return () => clearTimeout(t);
+  }, [combatStep, turnResult, enemy, player, playerRow, enemyRow, playerPos, enemyPos, spawnIntent]);
+
+  // 광고 재도전: 같은 슬롯으로 새 게임 시작
+  const startGame = useCallback(() => {
+    setPhase('stat_roll');
+    setFloor(1); setPlayerPos(1); setEnemyPos(4); setMagicCooldown(0); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
+    setLogs(['능력치를 분배하는 중...']);
+  }, []);
+
+  const completeTutorial = useCallback(() => {
+    if (typeof window !== 'undefined') localStorage.setItem(TUTORIAL_KEY, 'true');
+    setPhase('stat_roll');
+    setFloor(1); setPlayerPos(1); setEnemyPos(4); setMagicCooldown(0); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
+    setLogs(['능력치를 분배하는 중...']);
+  }, []);
+
+  const onStatRollComplete = useCallback((p: Character) => {
+    const ghosts = loadFloorGhosts();
+    const e = generateEnemy(1, legacy, ghosts, p);
+    setPlayer(p); setEnemy(e); setFloor(1);
+    setPlayerPos(1); setEnemyPos(4); setMagicCooldown(0); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
+    setLogs([`전투 시작! 적: ${e.name}${e.isLegacy ? ' 👻' : ''}`]);
+    setPhase('battle');
+    spawnIntent(e, COMBAT_ROW_DEFAULT, COMBAT_ROW_DEFAULT, 1, 4, p.hp, p.maxHp);
+    setStats({ floorsCleared:0, bossesKilled:0, perfectBlocks:0 });
+  }, [legacy, spawnIntent]);
+
+  const nextFloor = useCallback((p: Character, currentFloor: number) => {
+    const nf = currentFloor + 1;
+    const ghosts = loadFloorGhosts();
+    const e = generateEnemy(nf, legacy, ghosts);
+    const newCond = rollCondition();
+    const pWithCond = { ...p, condition: newCond };
+    setFloor(nf); setEnemy(e); setPlayer(pWithCond); setPhase('battle');
+    setPlayerPos(1); setEnemyPos(4); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
+    const condMsg = newCond !== 'normal' ? ` (컨디션: ${CONDITION_LABELS[newCond]})` : '';
+    addLog(`--- ${nf}층 ---  적: ${e.name}${e.isLegacy ? ' 👻' : ''}${condMsg}`);
+    spawnIntent(e, COMBAT_ROW_DEFAULT, COMBAT_ROW_DEFAULT, 1, 4, pWithCond.hp, pWithCond.maxHp);
+  }, [legacy, addLog, spawnIntent]);
+
+  // ── Step 1: pick main ────────────────────────────────────
+  const handleMainSelect = useCallback((action: ActionType) => {
+    setPlayerMain(action);
+    setCombatStep('select_sub');
+  }, []);
+
+  // ── Step 2: pick sub → rolling → result ──────────────────
+  const handleSubSelect = useCallback((sub: SubAction) => {
+    if (!player || !enemy || !intent || !playerMain) return;
+
+    const result = resolveTurn(playerMain, sub, enemy, intent, player, playerPos, enemyPos, playerRow, enemyRow);
+
+    // Show rolling animation first (req #2)
+    setTurnResult(result);
+    setCombatStep('rolling');
+    setDiceRolling(true);
+
+    setTimeout(() => {
+      setDiceRolling(false);
+      setCombatStep('result');
+
+      // Apply damage + healing
+      let newPlayerHp = Math.min(player.maxHp, player.hp - result.damageTaken + (result.healAmount ?? 0));
+      let newEnemyHp  = enemy.hp  - result.damageDealt;
+      const playerMpRegen = getMagicRegenByProgress(floor, player);
+      const playerSpellCost = getMagicCostByProgress(floor, player);
+      let newPlayerMp = Math.min(player.maxMp, Math.max(0, player.mp + playerMpRegen - (playerMain === '마법 사용' ? playerSpellCost : 0)));
+      const extraEnemyMp = enemy.abilities?.reduce((sum, a) => sum + (a.mpRegen ?? 0), 0) ?? 0;
+      const newEnemyMp = Math.min(enemy.maxMp, enemy.mp + 5 + extraEnemyMp);
+      let nextCooldown = magicCooldown;
+      if (playerMain === '마법 사용') {
+        nextCooldown = getMagicCooldownByProgress(floor, player) + 1;
+      } else if (nextCooldown > 0) {
+        nextCooldown = Math.max(0, nextCooldown - 1);
+      }
+
+      // 위치 업데이트
+      setPlayerPos(result.newPlayerPos);
+      setEnemyPos(result.newEnemyPos);
+      setPlayerRow(result.newPlayerRow);
+      setEnemyRow(result.newEnemyRow);
+      if (result.newDistance !== distance) {
+        addLog(`  위치: ${playerPos}→${result.newPlayerPos} / 적: ${enemyPos}→${result.newEnemyPos} (거리 ${distance}→${result.newDistance})`);
+      }
+      if (result.newPlayerRow !== playerRow) addLog(`  ↕ 행 이동 ${playerRow}→${result.newPlayerRow}`);
+      if (result.newEnemyRow  !== enemyRow)  addLog(`  ↕ 적 행 이동 ${enemyRow}→${result.newEnemyRow}`);
+      if (result.playerRowMiss) showFloat('빗나감!', 'miss', 'enemy');
+      if (result.enemyRowMiss)  showFloat('회피!',   'miss', 'player');
+
+      const subInfo = `[${playerMain}·${sub}] vs [${intent.mainAction}·${intent.subAction}]`;
+      addLog(`${subInfo}`);
+      addLog(`  ${result.message} | ${result.playerDice.mode === 'sum' ? `합산🔥${result.playerDice.sum}` : `최고⚀${result.playerDice.kept}`}`);
+      if (result.damageDealt > 0) addLog(`  적 피해 -${result.damageDealt}`);
+      if (result.damageTaken > 0) addLog(`  내 피해 -${result.damageTaken}`);
+
+      const playerStamDelta = getStaminaDelta(playerMain);
+      const enemyStamDelta = getStaminaDelta(intent.mainAction);
+      if (playerStamDelta > 0) { addLog(`⚡ 이동으로 스테미너 +${playerStamDelta}`); showFloat(`⚡+${playerStamDelta}`, 'info', 'player'); }
+      else if (playerStamDelta < 0) addLog(`⚡ 스테미너 -${Math.abs(playerStamDelta)}`);
+      if (enemyStamDelta > 0) addLog(`⚡ 적 이동으로 스테미너 +${enemyStamDelta}`);
+      else if (enemyStamDelta < 0) addLog(`⚡ 적 스테미너 -${Math.abs(enemyStamDelta)}`);
+
+      if (result.damageDealt > 0) showFloat(result.isCritical ? `합산! ${result.damageDealt}` : `-${result.damageDealt}`, result.isCritical ? 'critical' : 'damage', 'enemy');
+      if (result.damageTaken > 0) showFloat(`-${result.damageTaken}`, 'damage', 'player');
+      if (result.healAmount && result.healAmount > 0) { showFloat(`+${result.healAmount} 회복`, 'heal', 'player'); addLog(`  ❤️ +${result.healAmount} 회복`); }
+      if (result.damageTaken === 0 && result.damageDealt === 0 && result.quality === 'perfect') showFloat('완벽 차단!', 'info', 'player');
+
+      let newStats = { ...stats };
+      if (result.quality === 'perfect' && playerMain === '방어') newStats.perfectBlocks++;
+
+      const updatedEnemy  = {
+        ...enemy,
+        hp: Math.max(0, newEnemyHp),
+        mp: newEnemyMp,
+        stamina: Math.max(0, Math.min(enemy.maxStamina, enemy.stamina + enemyStamDelta)),
+      };
+      let   updatedPlayer = {
+        ...player,
+        hp: Math.max(0, newPlayerHp),
+        mp: Math.max(0, newPlayerMp),
+        stamina: Math.max(0, Math.min(player.maxStamina, player.stamina + playerStamDelta)),
+      };
+      // 아이템 소모 (모든 아이템은 사용 후 1개 제거)
+      if (playerMain === '아이템 사용') {
+        const usedIdx = updatedPlayer.inventory.findIndex(it => it.name === sub);
+        if (usedIdx >= 0) {
+          const newInv = [...updatedPlayer.inventory];
+          newInv.splice(usedIdx, 1);
+          updatedPlayer = { ...updatedPlayer, inventory: newInv };
+          const remaining = newInv.filter(it => it.name === sub).length;
+          const emoji = sub === '치유 물약' ? '🧪' : '🗡️';
+          addLog(`${emoji} ${sub} 소모 (남은 수량: ${remaining})`);
+        }
+      }
+      setMagicCooldown(nextCooldown);
+
+      // Enemy defeated
+      if (updatedEnemy.hp <= 0) {
+        const isBoss = enemy.isBoss ?? false;
+        newStats = { ...newStats, floorsCleared: newStats.floorsCleared + 1,
+          bossesKilled: isBoss ? newStats.bossesKilled + 1 : newStats.bossesKilled };
+        if (newStats.perfectBlocks >= 10 && !updatedPlayer.titles.find(t => t.id === 'weapon_breaker')) {
+          updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='weapon_breaker') ?? TITLES_DATA[0]), equipped:false }] };
+          addLog('🏅 칭호: [무기 파괴자]');
+        }
+        if (newStats.floorsCleared >= 5 && !updatedPlayer.titles.find(t => t.id === 'tower_climber')) {
+          updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='tower_climber') ?? TITLES_DATA[0]), equipped:false }] };
+          addLog('🏅 칭호: [탑 등반가]');
+        }
+        if (newStats.floorsCleared >= 10 && !updatedPlayer.titles.find(t => t.id === 'magic_adept')) {
+          updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='magic_adept') ?? TITLES_DATA[0]), equipped:false }] };
+          addLog('🏅 칭호: [비전 연구자]');
+        }
+        if (isBoss && !updatedPlayer.titles.find(t => t.id === 'boss_slayer')) {
+          updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='boss_slayer') ?? TITLES_DATA[0]), equipped:false }] };
+          addLog('🏅 칭호: [보스 사냥꾼]');
+        }
+        if (updatedPlayer.hp <= player.maxHp * 0.25 && !updatedPlayer.titles.find(t => t.id === 'survivor')) {
+          updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='survivor') ?? TITLES_DATA[0]), equipped:false }] };
+          addLog('🏅 칭호: [생존자] (체력 25% 이하에서 승리)');
+        }
+        setStats(newStats);
+        updateHighScore(floor);
+        addLog(`✅ ${enemy.name} 처치!`);
+
+        // 마법 흡수
+        const enemySpell = updatedEnemy.magicSlots.length > 0 ? updatedEnemy.magicSlots[0] : null;
+        if (enemySpell) {
+          if (updatedPlayer.magicSlots.length < 3) {
+            const newSlots = [...updatedPlayer.magicSlots, enemySpell] as MagicSpell[];
+            updatedPlayer = { ...updatedPlayer, magicSlots: newSlots };
+            addLog(`✨ ${enemySpell} 마법 흡수! (슬롯 ${newSlots.length}/3)`);
+          } else {
+            setPendingMagicAbsorb(enemySpell);
+            addLog(`✨ ${enemySpell} 획득 가능 — 리워드 화면에서 슬롯 교체`);
+          }
+        }
+
+        setPlayer(updatedPlayer); setEnemy(updatedEnemy);
+        setTimeout(() => setPhase('reward'), 1200);
+        return;
+      }
+
+      // Player defeated — 생명력 개념 없음, 즉시 게임오버
+      if (updatedPlayer.hp <= 0) {
+        // 2층 이상에서 사망 시 아래 층에 이름을 가진 몬스터로 저장
+        if (floor >= 2) {
+          addFloorGhost(floor - 1, updatedPlayer);
+          addLog(`👻 ${updatedPlayer.name} — ${floor - 1}층에 출몰`);
+        }
+        setLegacy(p => [...p.slice(-4), {
+          ...updatedPlayer,
+          id: `legacy_${Date.now()}`,
+          name: `${updatedPlayer.name}의 영혼`,
+          isLegacy: true,
+          hp: updatedPlayer.maxHp, mp: updatedPlayer.maxMp,
+        }]);
+        updateHighScore(floor);
+        addLog('💀 패배!');
+        setPlayer({ ...updatedPlayer, hp: 0 });
+        setEnemy(updatedEnemy);
+        setTimeout(() => setPhase('gameover'), 1200);
+        return;
+      }
+
+      setStats(newStats);
+      setPlayer(updatedPlayer);
+      setEnemy(updatedEnemy);
+    }, 1500); // dice roll duration
+  }, [player, enemy, intent, playerMain, playerPos, enemyPos, playerRow, enemyRow, distance, stats, floor, magicCooldown, updateHighScore, addLog, showFloat]);
+
+  // ════════════════════════════════════════════════════════
+  // RENDER
+  // ════════════════════════════════════════════════════════
+
+  if (phase === 'start') return (
+    <div className="min-h-screen"><StartScreen highScore={highScore} onSelectSlot={handleSlotSelect} onNewGame={handleNewGame} /></div>
+  );
+
+  if (phase === 'tutorial') return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <TutorialScreen onComplete={completeTutorial} />
+      </div>
+    </div>
+  );
+
+  if (phase === 'naming') return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <NameInputScreen onComplete={(name) => {
+          setPendingPlayerName(name);
+          setPhase('stat_roll');
+          setLogs([`${name} — 능력치를 분배하는 중...`]);
+        }} />
+      </div>
+    </div>
+  );
+
+  if (phase === 'stat_roll') return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <StatRollScreen highScore={highScore} onComplete={onStatRollComplete} playerName={pendingPlayerName} />
+      </div>
+    </div>
+  );
+
+  if (phase === 'gameover') return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md"><GameOverScreen floor={floor} onRetry={() => { setPhase('start'); setPlayer(null); setEnemy(null); setActiveSaveSlot(-1); }} onWatchAd={startGame} /></div>
+    </div>
+  );
+
+  if (phase === 'reward' && player && enemy) {
+    // 마법 슬롯 교체가 필요한 경우 먼저 보여줌
+    if (pendingMagicAbsorb) return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md">
+          <MagicAbsorbPanel
+            newSpell={pendingMagicAbsorb}
+            currentSlots={player.magicSlots}
+            onSwap={(i) => {
+              const newSlots = [...player.magicSlots] as MagicSpell[];
+              newSlots[i] = pendingMagicAbsorb;
+              setPlayer({ ...player, magicSlots: newSlots });
+              addLog(`✨ 슬롯 ${i + 1}: ${pendingMagicAbsorb} 흡수 완료`);
+              setPendingMagicAbsorb(null);
+            }}
+            onSkip={() => { setPendingMagicAbsorb(null); addLog('마법 흡수 건너뜀'); }}
+          />
+        </div>
+      </div>
+    );
+    return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-md">
+        <RewardScreen floor={floor} enemy={enemy}
+          onLoot={eq => {
+            let p = { ...player, equipment: [...player.equipment, eq] };
+            if (eq.stats.strength) p = { ...p, stats: { ...p.stats, strength: p.stats.strength + (eq.stats.strength??0) }};
+            if (eq.stats.agility)  p = { ...p, stats: { ...p.stats, agility:  p.stats.agility  + (eq.stats.agility ??0) }};
+            if (eq.stats.armor)    p = { ...p, stats: { ...p.stats, armor: Math.min(80, p.stats.armor+(eq.stats.armor??0)) }};
+            addLog(`🗡️ ${eq.name} 획득`); nextFloor(p, floor);
+          }}
+          onAbsorb={() => {
+            const p = { ...player, stats: { ...player.stats,
+              strength: player.stats.strength + Math.floor(enemy.stats.strength * 0.1),
+              agility:  player.stats.agility  + Math.floor(enemy.stats.agility  * 0.1),
+            }};
+            addLog('💀 흡수!'); nextFloor(p, floor);
+          }}
+          onSkip={() => nextFloor(player, floor)}
+        />
+      </div>
+    </div>
+    );
+  }
+
+  if (!player || !enemy || !intent) return null;
+
+  return (
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-2 sm:p-4">
+      <div className="w-full max-w-3xl bg-gray-900 rounded-lg shadow-2xl overflow-hidden border border-gray-700">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-3 py-2 bg-gray-800 border-b border-gray-700 text-sm gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <span className="text-yellow-400 font-bold">⚔️ {floor}층</span>
+            <span className="text-gray-300 text-xs">Lv.{player.level} {player.name}</span>
+            <span className="text-gray-500 text-xs">장비 {player.equipment.length} · 최고 {highScore}층</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className={`text-xs ${magicCooldown > 0 ? 'text-red-400' : 'text-green-400'}`}>
+              마법 {magicCooldown > 0 ? `대기 ${magicCooldown}턴` : '사용 가능'}
+            </div>
+            <button onClick={saveCurrentGame}
+              className="text-[10px] bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded-lg text-white transition-colors">
+              저장
+            </button>
+          </div>
+        </div>
+
+        {/* 5칸 전투 그리드 + 캐릭터 상태 */}
+        <BattleGrid
+          playerPos={playerPos} enemyPos={enemyPos}
+          playerRow={playerRow} enemyRow={enemyRow}
+          playerMain={playerMain}
+          playerWeaponRange={player.weaponRange ?? 1}
+          enemy={enemy}
+          player={player}
+          floatingTexts={floating}
+        />
+
+        {/* Main content */}
+        <div className="p-3 space-y-3">
+          <div className="space-y-3">
+
+            <div className="border border-gray-700 rounded-lg p-3">
+              {combatStep === 'select_main' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-gray-400">행동 유형을 선택하세요</span>
+                    <div className="flex gap-2 text-[10px]">
+                      <span className={distance <= player.weaponRange ? 'text-green-400' : 'text-orange-400'}>
+                        🗡️ 사정거리 {player.weaponRange} / 현재 {distance}
+                      </span>
+                      <span className="text-purple-400">✨ {player.magicSlots.length}/3</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(['공격','이동','방어','마법 사용'] as ActionType[]).map(action => {
+                      const playerSpellCost = getMagicCostByProgress(floor, player);
+                      const outOfRange = action === '공격' && distance > player.weaponRange;
+                      const disabled = action === '마법 사용' && (player.mp < playerSpellCost || magicCooldown > 0 || player.magicSlots.length === 0);
+                      const bonus = distanceBonus(action, distance);
+                      return (
+                        <button key={action} disabled={disabled} onClick={() => handleMainSelect(action)}
+                          className={`flex flex-col py-2.5 px-3 rounded-lg border text-sm font-semibold transition-all active:scale-95
+                            ${disabled ? 'bg-gray-800 border-gray-700 text-gray-600 cursor-not-allowed'
+                              : outOfRange ? 'bg-orange-950/30 border-orange-700 text-orange-200 hover:bg-orange-900/40 cursor-pointer'
+                              : 'bg-gray-700 border-gray-500 text-white hover:bg-gray-600 cursor-pointer'}`}>
+                          <div className="flex items-center justify-between w-full">
+                            <span>{ACTION_ICONS[action]} {action}</span>
+                            {bonus !== 1.0 && (
+                              <span className={`text-[10px] font-bold ${bonus > 1 ? 'text-green-400' : 'text-red-400'}`}>
+                                {bonus > 1 ? `+${Math.round((bonus-1)*100)}%` : `${Math.round((bonus-1)*100)}%`}
+                              </span>
+                            )}
+                          </div>
+                          {action === '공격' && (
+                            <span className={`text-[9px] mt-0.5 ${outOfRange ? 'text-orange-400 font-bold' : 'text-green-500'}`}>
+                              {outOfRange ? `⚠ 사정거리 초과! (${player.weaponRange} 이내 필요)` : `✓ 범위 내 (${player.weaponRange})`}
+                            </span>
+                          )}
+                          {action === '마법 사용' && (
+                            <span className="text-[9px] mt-0.5 text-purple-400">
+                              슬롯: {player.magicSlots.join(', ') || '없음'}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {/* 아이템 사용 — 전체 너비 */}
+                  {(() => {
+                    const itemCount = player.inventory.length;
+                    const itemDisabled = itemCount === 0;
+                    return (
+                      <button disabled={itemDisabled} onClick={() => handleMainSelect('아이템 사용')}
+                        className={`w-full flex items-center justify-between py-2.5 px-3 rounded-lg border text-sm font-semibold transition-all active:scale-95
+                          ${itemDisabled ? 'bg-gray-800 border-gray-700 text-gray-600 cursor-not-allowed'
+                            : 'bg-gray-700 border-gray-500 text-white hover:bg-gray-600 cursor-pointer'}`}>
+                        <span>🎒 아이템 사용</span>
+                        <span className={`text-[10px] ${itemDisabled ? 'text-gray-600' : 'text-yellow-400'}`}>
+                          {itemDisabled ? '아이템 없음' : `인벤토리: ${player.inventory.map(it => it.name).join(', ')}`}
+                        </span>
+                      </button>
+                    );
+                  })()}
+                </div>
+              )}
+              {combatStep === 'select_sub' && playerMain && (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => { setPlayerMain(null); setCombatStep('select_main'); }}
+                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors px-1 py-0.5">
+                    ← 뒤로
+                  </button>
+                  <SubActionPanel playerMain={playerMain} intent={intent} onSelect={handleSubSelect}
+                    playerMagicSlots={player.magicSlots} playerInventory={player.inventory}
+                    playerPos={playerPos} playerRow={playerRow}
+                    enemyPos={enemyPos} enemyRow={enemyRow}
+                    distance={distance} />
+                </div>
+              )}
+              {(combatStep === 'rolling' || combatStep === 'result') && turnResult && (
+                <div className="space-y-3">
+                  <DicePanel result={turnResult} rolling={diceRolling} playerName={player.name} enemyName={enemy.name} />
+                  {combatStep === 'result' && enemy.hp > 0 && player.hp > 0 && (
+                    <div className="text-center text-gray-600 text-xs animate-pulse">
+                      2.5초 후 자동으로 다음 턴...
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-3 border-t border-gray-700">
+          <BattleLog logs={logs} />
+        </div>
+      </div>
+    </div>
+  );
+}
