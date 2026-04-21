@@ -4,7 +4,7 @@
 
 export type ActionType   = '공격' | '이동' | '방어' | '마법 사용' | '아이템 사용';
 export type GamePhase    = 'start' | 'tutorial' | 'naming' | 'stat_roll' | 'battle' | 'reward' | 'gameover';
-export type TitleId      = 'weapon_breaker' | 'tower_climber' | 'boss_slayer' | 'magic_adept' | 'survivor' | 'novice';
+export type TitleId      = 'weapon_breaker' | 'tower_climber' | 'boss_slayer' | 'magic_adept' | 'survivor' | 'novice' | `combat_${string}`;
 export type MatchQuality = 'perfect' | 'partial' | 'miss';
 export type CombatStep   = 'select_main' | 'select_sub' | 'rolling' | 'result';
 export type DiceMode     = 'highest' | 'sum';   // sum = 합산 크리티컬
@@ -39,11 +39,11 @@ export function getConditionMultiplier(c?: Condition): number {
 export type AttackSub = '세로 베기' | '가로 베기' | '찌르기';
 export type DefendSub = '정면 막기' | '올려막기' | '흘려막기';
 export type MoveSub   = '전진 압박' | '후퇴' | '위로 이동' | '아래로 이동';
-export type ItemSub   = '치유 물약' | '단검 던지기';
-export type MagicSpell = '화염 쇄도' | '암흑 속박' | '회복술' | '빙결 창';
+export type ItemSub   = '치유 물약' | '단검 던지기' | '폭발 물약' | '강화 단검' | '대형 치유 물약';
+export type MagicSpell = '화염 쇄도' | '암흑 속박' | '회복술' | '빙결 창' | '번개 일격' | '바람 쇄도';
 export type SubAction = AttackSub | DefendSub | MoveSub | ItemSub | MagicSpell;
 
-export const MAGIC_SPELL_POOL: MagicSpell[] = ['화염 쇄도', '암흑 속박', '회복술', '빙결 창'];
+export const MAGIC_SPELL_POOL: MagicSpell[] = ['화염 쇄도', '암흑 속박', '회복술', '빙결 창', '번개 일격', '바람 쇄도'];
 export const STARTING_ITEMS: Item[] = [
   { id:'healing_potion', name:'치유 물약', kind:'potion', description:'체력 25 회복', heal:25 },
   { id:'throwing_dagger', name:'단검 던지기', kind:'throwing', description:'원거리 단검 던지기', damage:12, range:4 },
@@ -74,6 +74,11 @@ export const PERFECT_COUNTER: Record<SubAction, SubAction> = {
   '빙결 창':     '후퇴',
   '치유 물약':  '전진 압박',
   '단검 던지기':'정면 막기',
+  '폭발 물약':  '후퇴',
+  '강화 단검':  '흘려막기',
+  '대형 치유 물약': '전진 압박',
+  '번개 일격':  '올려막기',
+  '바람 쇄도':  '전진 압박',
 };
 
 export const SUB_ACTION_INFO: Record<SubAction, { desc: string; counter: string; hint: string }> = {
@@ -93,6 +98,11 @@ export const SUB_ACTION_INFO: Record<SubAction, { desc: string; counter: string;
   '빙결 창':    { desc: '얼음 창을 던진다',  counter: '→ 후퇴',     hint: '팔을 들어올리며 차가운 기운이 모였다' },
   '치유 물약':  { desc: '체력 회복 물약 사용', counter: '→ 전진 압박', hint: '허리춤에서 무언가를 꺼내 들었다' },
   '단검 던지기':{ desc: '원거리 단검 공격',  counter: '→ 정면 막기', hint: '작은 단검을 손에 쥐고 팔을 뒤로 당겼다' },
+  '폭발 물약':  { desc: '폭발 피해 (방어 무시)', counter: '→ 후퇴', hint: '주머니에서 붉게 빛나는 구슬을 꺼내 들었다' },
+  '강화 단검':  { desc: '강력한 단검 투척',   counter: '→ 흘려막기', hint: '무거운 단검을 손에 쥐고 조준했다' },
+  '대형 치유 물약': { desc: '체력 50 대량 회복', counter: '→ 전진 압박', hint: '큼지막한 물약을 꺼내 뚜껑을 열었다' },
+  '번개 일격':  { desc: '번개 마법 공격',     counter: '→ 올려막기', hint: '팔끝에서 파란 전기가 지직거리기 시작했다' },
+  '바람 쇄도':  { desc: '바람 마법 공격',     counter: '→ 전진 압박', hint: '양손이 바람을 끌어모으며 소용돌이쳤다' },
 };
 
 // ── Distance ─────────────────────────────────────────────────
@@ -122,11 +132,12 @@ export function calcNewRow(sub: SubAction, currentRow: number): number {
   return currentRow;
 }
 
-/** 사정거리 이내라면 행 차이에 관계없이 명중 */
+/** 공격은 같은 행에만 명중. 마법·아이템은 행 무관 (광역/투척). */
 export function isAttackHitByRow(
-  _action: ActionType, _attackerRow: number, _defenderRow: number,
+  action: ActionType, attackerRow: number, defenderRow: number,
 ): boolean {
-  return true;
+  if (action !== '공격') return true;
+  return attackerRow === defenderRow;
 }
 
 // Action effectiveness at given distance (damage multiplier)
@@ -423,6 +434,22 @@ export const ENEMY_TEMPLATES: EnemyTemplate[] = [
     description:'탑의 수호자 검사 원로',
     weaponRange: 3,
   },
+  {
+    id:'executioner', name:'검사 집행관', minFloor:8, maxFloor:15, isBoss:false,
+    baseStats:{ strength:45, agility:30, elements:{fire:10,water:5,wind:5,earth:18,dark:5}, armor:22, critChance:15 },
+    baseHp:180, baseMp:30,
+    actionWeights:{'공격':50,'이동':15,'방어':25,'마법 사용':10,'아이템 사용':0},
+    description:'탑의 규율을 집행하는 검사',
+    weaponRange: 2,
+  },
+  {
+    id:'arcane_swordsman', name:'검사 마도사', minFloor:11, maxFloor:99, isBoss:false,
+    baseStats:{ strength:15, agility:22, elements:{fire:30,water:20,wind:20,earth:10,dark:35}, armor:10, critChance:35 },
+    baseHp:110, baseMp:120,
+    actionWeights:{'공격':5,'이동':15,'방어':10,'마법 사용':70,'아이템 사용':0},
+    description:'검과 마법을 동시에 다루는 마도사',
+    weaponRange: 4,
+  },
 ];
 
 export const EQUIPMENT_POOL: Equipment[] = [
@@ -434,6 +461,90 @@ export const EQUIPMENT_POOL: Equipment[] = [
   { id:'iron_shield',  name:'철제 방패',     type:'armor',  stats:{armor:15},    description:'강인한 방어력' },
   { id:'shadow_cloak', name:'그림자 망토',   type:'armor',
     stats:{agility:8, elements:{fire:0,water:0,wind:0,earth:0,dark:10}}, description:'암흑 속에 숨는다' },
+];
+
+export const EQUIPMENT_POOL_T2: Equipment[] = [
+  { id:'steel_sword',  name:'강철 대검',     type:'weapon', stats:{strength:18}, description:'묵직한 강철 대검', range:2 },
+  { id:'agile_armor',  name:'경량 갑옷',     type:'armor',  stats:{agility:14, armor:6}, description:'빠르고 가벼운 갑옷' },
+  { id:'frost_blade',  name:'빙결 도검',     type:'weapon',
+    stats:{strength:10, elements:{fire:0,water:22,wind:0,earth:0,dark:0}}, description:'얼음 기운이 깃든 검', range:2 },
+  { id:'heavy_shield', name:'중갑 방패',     type:'armor',  stats:{armor:22},    description:'두껍고 무거운 방패' },
+  { id:'wind_cloak',   name:'폭풍 망토',     type:'armor',
+    stats:{agility:12, elements:{fire:0,water:0,wind:18,earth:0,dark:0}}, description:'바람을 타는 망토' },
+  { id:'thunder_blade',name:'뇌전 도검',     type:'weapon',
+    stats:{strength:12, elements:{fire:0,water:0,wind:12,earth:0,dark:8}}, description:'번개가 깃든 검', range:2 },
+];
+
+export const EQUIPMENT_POOL_T3: Equipment[] = [
+  { id:'legendary_sword', name:'전설의 검',  type:'weapon', stats:{strength:28}, description:'탑의 전설로 불리는 검', range:3 },
+  { id:'master_armor',    name:'마스터 갑주',type:'armor',  stats:{armor:28, agility:10}, description:'최상급 장인의 작품' },
+  { id:'arcane_staff',    name:'비전 지팡이',type:'weapon',
+    stats:{strength:6, elements:{fire:18,water:18,wind:18,earth:18,dark:18}}, description:'모든 속성이 깃든 지팡이', range:5 },
+  { id:'crimson_blade',   name:'홍염 대검',  type:'weapon',
+    stats:{strength:22, elements:{fire:20,water:0,wind:0,earth:0,dark:0}}, description:'붉은 불꽃이 타오르는 대검', range:2 },
+  { id:'void_armor',      name:'허공의 갑주',type:'armor',
+    stats:{armor:20, agility:14, elements:{fire:0,water:0,wind:0,earth:0,dark:20}}, description:'어둠과 하나된 갑옷' },
+];
+
+export function getRewardEquipment(floor: number): Equipment {
+  const pool = floor >= 13 ? EQUIPMENT_POOL_T3 : floor >= 6 ? EQUIPMENT_POOL_T2 : EQUIPMENT_POOL;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// 전투 후 적 능력치 기반으로 랜덤 칭호 3개 생성
+export function generateCombatTitles(enemy: Character): Title[] {
+  const s = enemy.stats;
+  const maxEl = Math.max(s.elements.fire, s.elements.water, s.elements.wind, s.elements.earth, s.elements.dark);
+  const elName = s.elements.fire >= maxEl ? '화염' : s.elements.water >= maxEl ? '냉기'
+    : s.elements.wind >= maxEl ? '바람' : s.elements.earth >= maxEl ? '대지' : '암흑';
+
+  const pool: Title[] = [
+    {
+      id: `combat_strength_${Date.now()}`,
+      name: `${enemy.name} 격파자`,
+      condition: `${enemy.name}을 쓰러뜨렸다`,
+      bonus: { strength: Math.max(4, Math.floor(s.strength * 0.15)) },
+      equipped: false,
+    },
+    {
+      id: `combat_agility_${Date.now() + 1}`,
+      name: enemy.stats.agility >= 30 ? '신속의 사냥꾼' : '날렵한 검사',
+      condition: `빠른 적을 제압했다`,
+      bonus: { agility: Math.max(4, Math.floor(s.agility * 0.15)) },
+      equipped: false,
+    },
+    {
+      id: `combat_armor_${Date.now() + 2}`,
+      name: enemy.stats.armor >= 20 ? '철벽 파괴자' : '방어 격파자',
+      condition: `견고한 방어를 뚫었다`,
+      bonus: { armor: Math.max(3, Math.floor(s.armor * 0.25)) },
+      equipped: false,
+    },
+    {
+      id: `combat_element_${Date.now() + 3}`,
+      name: `${elName}의 계승자`,
+      condition: `${elName} 속성의 적을 쓰러뜨렸다`,
+      bonus: { critChance: Math.max(4, Math.floor(s.critChance * 0.3)) },
+      equipped: false,
+    },
+    ...(enemy.isBoss ? [{
+      id: `combat_boss_${Date.now() + 4}` as TitleId,
+      name: '보스 처치자',
+      condition: '강력한 보스를 쓰러뜨렸다',
+      bonus: { strength: 8, agility: 5, critChance: 5 },
+      equipped: false,
+    }] : []),
+  ];
+
+  // 3개 랜덤 선택
+  const shuffled = pool.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3);
+}
+
+export const ITEM_REWARD_POOL: Item[] = [
+  { id:'explosive_potion',      name:'폭발 물약',      kind:'throwing', description:'방어 무시 폭발 피해 (사거리 5)', damage:30, range:5 },
+  { id:'reinforced_dagger',     name:'강화 단검',      kind:'throwing', description:'강력한 단검 투척 (사거리 4)', damage:20, range:4 },
+  { id:'large_healing_potion',  name:'대형 치유 물약', kind:'potion',   description:'체력 50 대량 회복', heal:50 },
 ];
 
 export const TITLES_DATA: Title[] = [
@@ -537,10 +648,13 @@ export function resolveTurn(
   const enemyStats = getEffectiveStats(enemy);
   const playerWeaponRange = player.weaponRange ?? 1;
   const enemyWeaponRange = enemy.weaponRange ?? 1;
-  const playerItemRange = playerMain === '아이템 사용' && playerSub === '단검 던지기' ? 4 : 0;
+  const playerItemRange = playerMain === '아이템 사용'
+    ? (playerSub === '폭발 물약' ? 5 : playerSub === '단검 던지기' || playerSub === '강화 단검' ? 4 : 0)
+    : 0;
   const playerInRange = playerMain !== '공격' || distance <= playerWeaponRange;
   const enemyInRange = intent.mainAction !== '공격' || distance <= enemyWeaponRange;
-  const itemCanHit = playerMain === '아이템 사용' && playerSub === '단검 던지기' ? distance <= playerItemRange : true;
+  const isThrowingItem = playerMain === '아이템 사용' && (playerSub === '단검 던지기' || playerSub === '강화 단검' || playerSub === '폭발 물약');
+  const itemCanHit = isThrowingItem ? distance <= playerItemRange : true;
 
   // Distance bonus multipliers
   const pDistMult = distanceBonus(playerMain, distance);
@@ -583,6 +697,25 @@ export function resolveTurn(
             damageDealt = Math.max(1, Math.floor(playerStats.strength * 0.9 * pMult * (1 - eArmorRed)));
             isCritical = playerDice.mode === 'sum';
             message = quality === 'perfect' ? '단검이 치명타로 명중!' : '단검이 적중했다';
+          }
+        } else if (playerSub === '강화 단검') {
+          if (!itemCanHit) {
+            damageDealt = 0;
+            message = '강화 단검이 사정 거리 밖으로 벗어났다';
+          } else {
+            damageDealt = Math.max(1, Math.floor(playerStats.strength * 1.2 * pMult * (1 - eArmorRed)));
+            isCritical = playerDice.mode === 'sum';
+            message = quality === 'perfect' ? '강화 단검 치명타!' : '강화 단검 적중!';
+          }
+        } else if (playerSub === '폭발 물약') {
+          if (!itemCanHit) {
+            damageDealt = 0;
+            message = '폭발 물약이 사정 거리 밖으로 빗나갔다';
+          } else {
+            // 방어구 무시 고정 피해
+            damageDealt = Math.max(1, Math.floor(32 * pMult));
+            isCritical = playerDice.mode === 'sum';
+            message = quality === 'perfect' ? '폭발 물약 치명 폭발!' : '폭발 물약이 터졌다!';
           }
         } else {
           damageDealt = 0;
@@ -651,15 +784,14 @@ export function resolveTurn(
       break;
     }
     case 'draw': {
-      // 단검 던지기 vs 적 전진 압박 — 교전 draw지만 단검은 이동 중인 적에게 효과 없음
-      if (playerMain === '아이템 사용' && playerSub === '단검 던지기' && intent.mainAction === '이동') {
+      // 투척 아이템 vs 적 이동 — 전진하는 적에게는 빗나감
+      if (isThrowingItem && intent.mainAction === '이동') {
         damageDealt = 0;
-        message = '단검을 던졌지만 전진하는 적의 기세에 밀려 빗나갔다';
+        message = '던졌지만 전진하는 적의 기세에 밀려 빗나갔다';
         break;
       }
       // 공격/마법 행동만 draw에서 피해를 줄 수 있음 — 이동·방어·아이템은 데미지 없음
-      const playerDealsInDraw = playerMain === '공격' || playerMain === '마법 사용'
-        || (playerMain === '아이템 사용' && playerSub === '단검 던지기');
+      const playerDealsInDraw = playerMain === '공격' || playerMain === '마법 사용' || isThrowingItem;
       const enemyDealsInDraw  = intent.mainAction === '공격' || intent.mainAction === '마법 사용';
 
       if (playerDealsInDraw || enemyDealsInDraw) {
@@ -765,6 +897,17 @@ export function resolveTurn(
       damageTaken, damageDealt,
       healAmount: 25,
       isCritical, message: '치유 물약으로 회복',
+      newDistance, newPlayerPos, newEnemyPos,
+      newPlayerRow, newEnemyRow, playerRowMiss, enemyRowMiss,
+    };
+  }
+  if (playerMain === '아이템 사용' && playerSub === '대형 치유 물약') {
+    return {
+      quality, baseOutcome: playerOutcome,
+      playerDice, enemyDice,
+      damageTaken, damageDealt,
+      healAmount: 50,
+      isCritical, message: '대형 치유 물약으로 대량 회복!',
       newDistance, newPlayerPos, newEnemyPos,
       newPlayerRow, newEnemyRow, playerRowMiss, enemyRowMiss,
     };

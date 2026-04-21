@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ActionType, SubAction, Character, FloatingText, GamePhase,
-  Equipment, Item, MagicSpell, CombatStep, MatchQuality, EnemyIntent, TurnResult, DiceResult,
+  Equipment, Item, Title, MagicSpell, CombatStep, MatchQuality, EnemyIntent, TurnResult, DiceResult,
   FloorGhosts,
   SUB_ACTIONS, SUB_ACTION_INFO, PERFECT_COUNTER,
   generateEnemyIntent, resolveTurn, generateEnemy, createPlayer,
-  EQUIPMENT_POOL, TITLES_DATA, DEFAULT_ACTION_WEIGHTS, DICE_FACE,
+  getRewardEquipment, ITEM_REWARD_POOL, generateCombatTitles,
+  TITLES_DATA, DEFAULT_ACTION_WEIGHTS, DICE_FACE,
   DISTANCE_LABELS, DISTANCE_COLORS, distanceBonus, getEffectiveStats, getStaminaDelta,
   getMagicCostByProgress, getMagicCooldownByProgress, getMagicRegenByProgress,
   COMBAT_ROW_DEFAULT, COMBAT_ROW_MIN, COMBAT_ROW_MAX,
@@ -155,12 +156,20 @@ function StaminaBar({ cur, max, label = true }: { cur: number; max: number; labe
 function FloatingLayer({ texts, side }: { texts: FloatingText[]; side: 'player' | 'enemy' }) {
   return (
     <div className="absolute inset-0 pointer-events-none overflow-hidden">
-      {texts.filter(t => t.side === side).map(ft => (
-        <div key={ft.id} className={`absolute animate-bounce-up font-bold drop-shadow-lg select-none
-          ${side === 'enemy' ? 'right-6 top-8' : 'left-6 top-8'}
-          ${ft.type === 'critical' ? 'text-yellow-300 text-xl' :
-            ft.type === 'damage'   ? 'text-red-400 text-base' :
-            ft.type === 'heal'     ? 'text-green-400 text-base' : 'text-white text-sm'}`}>
+      {texts.filter(t => t.side === side).map((ft, i) => (
+        <div key={ft.id} style={{ top: `${20 + i * 22}px`, [side === 'enemy' ? 'right' : 'left']: '12px' }}
+          className={`absolute animate-bounce-up select-none drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]
+            ${ft.type === 'critical'
+              ? 'text-yellow-300 text-3xl font-black tracking-tight'
+              : ft.type === 'damage' && side === 'player'
+              ? 'text-red-400 text-2xl font-bold'
+              : ft.type === 'damage'
+              ? 'text-orange-300 text-2xl font-bold'
+              : ft.type === 'heal'
+              ? 'text-green-400 text-xl font-bold'
+              : ft.type === 'miss'
+              ? 'text-gray-400 text-base font-semibold italic'
+              : 'text-blue-300 text-sm font-medium'}`}>
           {ft.text}
         </div>
       ))}
@@ -175,7 +184,7 @@ function FloatingLayer({ texts, side }: { texts: FloatingText[]; side: 'player' 
 // 행 기본값은 gameData의 COMBAT_ROW_DEFAULT(2) 사용
 
 function BattleGrid({
-  playerPos, enemyPos, playerRow, enemyRow, playerMain, playerWeaponRange, enemy, player, floatingTexts,
+  playerPos, enemyPos, playerRow, enemyRow, playerMain, playerWeaponRange, enemy, player, floatingTexts, hitFlash,
 }: {
   playerPos: number; enemyPos: number;
   playerRow: number; enemyRow: number;
@@ -184,6 +193,7 @@ function BattleGrid({
   enemy: Character;
   player: Character;
   floatingTexts: FloatingText[];
+  hitFlash?: 'player' | 'enemy' | 'both' | null;
 }) {
   const distance    = enemyPos - playerPos;
   const label       = DISTANCE_LABELS[distance] ?? `거리 ${distance}`;
@@ -322,8 +332,8 @@ function BattleGrid({
                       flex-1 flex items-center justify-center rounded-lg border
                       transition-all duration-300 select-none
                       h-12
-                      ${isPlayer   ? 'bg-blue-900/70 border-blue-400 shadow-[0_0_16px_rgba(59,130,246,0.55)]'
-                      : isEnemy    ? 'bg-red-900/70  border-red-400  shadow-[0_0_16px_rgba(239,68,68,0.55)]'
+                      ${isPlayer   ? `bg-blue-900/70 border-blue-400 shadow-[0_0_16px_rgba(59,130,246,0.55)] ${(hitFlash==='player'||hitFlash==='both') ? 'animate-pulse bg-red-900/80 border-red-300' : ''}`
+                      : isEnemy    ? `bg-red-900/70  border-red-400  shadow-[0_0_16px_rgba(239,68,68,0.55)]  ${(hitFlash==='enemy'||hitFlash==='both')  ? 'animate-pulse bg-yellow-900/80 border-yellow-300' : ''}`
                       : isInRange  ? 'bg-green-950/50 border-green-700/60'
                       : isPlayerRow? 'bg-blue-900/20  border-blue-900/40'
                       : isEnemyRow ? 'bg-red-900/20   border-red-900/40'
@@ -591,36 +601,23 @@ function SubActionPanel({ playerMain, intent, onSelect, playerMagicSlots, player
 
   // 불가능한 적 서브 제외 후 확률 재정규화
   const allEnemySubs = (SUB_ACTIONS[intent.mainAction] as SubAction[]).filter(s => !isEnemySubImpossible(s));
-  const rawTotal = allEnemySubs.reduce((sum, s) => sum + (intent.subProbs[s] ?? 0), 0);
-  const normalizeProb = (p: number) => rawTotal > 0 ? Math.round(p / rawTotal * 100) : 0;
-
   const likelyEnemySub = allEnemySubs.length > 0
     ? allEnemySubs.reduce((a, b) => (intent.subProbs[b] ?? 0) > (intent.subProbs[a] ?? 0) ? b : a)
     : (SUB_ACTIONS[intent.mainAction] as SubAction[])[0];
   const perfectVsLikely = PERFECT_COUNTER[likelyEnemySub];
 
+  const likelyHint = SUB_ACTION_INFO[likelyEnemySub]?.hint ?? '';
+
   return (
     <div className="space-y-2">
       <div className="text-xs text-gray-400 px-1">
         <span className="text-white font-semibold">{ACTION_ICONS[playerMain]} {playerMain}</span>의 세부 기술 선택
-        <span className="ml-1 text-gray-600">— 적 세부 행동에 맞춰야 완벽!</span>
       </div>
       <div className="bg-gray-950 border border-gray-800 rounded p-2 text-[11px]">
-        <div className="text-gray-500 mb-1">적의 자세:</div>
-        {allEnemySubs.map(enemySub => {
-          const rawProb = intent.subProbs[enemySub] ?? 0;
-          const prob = normalizeProb(rawProb);
-          const hint = SUB_ACTION_INFO[enemySub]?.hint ?? '';
-          return (
-            <div key={enemySub} className="flex items-center gap-2 py-0.5">
-              <div className="w-14 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full bg-orange-600 rounded-full" style={{ width: `${prob}%` }} />
-              </div>
-              <span className="text-gray-400 flex-1">{hint}</span>
-              <span className="text-gray-600 text-[10px]">{prob}%</span>
-            </div>
-          );
-        })}
+        <div className="text-gray-500 mb-1 text-[10px]">적의 다음 행동</div>
+        <p className="text-orange-300 leading-snug">
+          {likelyHint}... 이런 행동을 할 것 같습니다.
+        </p>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {myOptions.map(sub => {
@@ -708,22 +705,64 @@ function DicePanel({ result, rolling, playerName, enemyName }: {
 // Other screens
 // ════════════════════════════════════════════════════════════
 
-function RewardScreen({ floor, enemy, onLoot, onAbsorb, onSkip }: {
+function RewardScreen({ floor, enemy, onLoot, onLootItem, onLootTitle, onSkip }: {
   floor: number; enemy: Character;
-  onLoot: (eq: Equipment) => void; onAbsorb: () => void; onSkip: () => void;
+  onLoot: (eq: Equipment) => void;
+  onLootItem: (it: Item) => void;
+  onLootTitle: (t: Title) => void;
+  onSkip: () => void;
 }) {
-  const [reward] = useState(() => EQUIPMENT_POOL[Math.floor(Math.random() * EQUIPMENT_POOL.length)]);
+  const [equipment] = useState(() => getRewardEquipment(floor));
+  const [item] = useState(() => ITEM_REWARD_POOL[Math.floor(Math.random() * ITEM_REWARD_POOL.length)]);
+  const [titles] = useState(() => generateCombatTitles(enemy));
+  const [view, setView] = useState<'main' | 'titles'>('main');
+
+  const bonusStr = (bonus: Partial<Character['stats']>) =>
+    Object.entries(bonus)
+      .filter(([, v]) => v && typeof v === 'number' && (v as number) > 0)
+      .map(([k, v]) => `${k === 'strength' ? '힘' : k === 'agility' ? '민첩' : k === 'armor' ? '방어' : k === 'critChance' ? '크리' : k}+${v}`)
+      .join(' ');
+
+  if (view === 'titles') return (
+    <div className="flex flex-col items-center gap-4 p-6 bg-gray-900 rounded-lg min-h-[300px] text-white">
+      <h2 className="text-xl font-bold text-purple-300">{floor}층 — 칭호 선택</h2>
+      <p className="text-xs text-gray-500">{enemy.name}을 꺾고 얻은 명성</p>
+      <div className="flex flex-col gap-3 w-full max-w-xs">
+        {titles.map(t => (
+          <button key={t.id} onClick={() => onLootTitle(t)}
+            className="bg-purple-900 hover:bg-purple-700 text-left rounded-lg px-4 py-3 border border-purple-600 transition-colors">
+            <div className="font-bold text-purple-200">{t.name}</div>
+            <div className="text-xs text-purple-400 mt-0.5">{t.condition}</div>
+            <div className="text-xs text-yellow-300 mt-1">{bonusStr(t.bonus)}</div>
+          </button>
+        ))}
+        <button onClick={() => setView('main')} className="text-gray-500 text-sm py-2">← 뒤로</button>
+      </div>
+    </div>
+  );
+
   return (
     <div className="flex flex-col items-center gap-4 p-6 bg-gray-900 rounded-lg min-h-[300px] text-white">
-      <h2 className="text-xl font-bold text-yellow-400">⚔️ {floor}층 클리어!</h2>
+      <h2 className="text-xl font-bold text-yellow-400">{floor}층 클리어</h2>
+      <p className="text-xs text-gray-500">{enemy.name} 처치</p>
       <div className="flex flex-col gap-3 w-full max-w-xs">
-        <button onClick={() => onLoot(reward)} className="bg-yellow-700 hover:bg-yellow-600 font-bold py-3 px-4 rounded-lg transition-colors">
-          🗡️ 장비: {reward.name}<span className="block text-xs text-yellow-300 mt-1">{reward.description}</span>
+        <button onClick={() => onLoot(equipment)}
+          className="bg-yellow-800 hover:bg-yellow-700 text-left rounded-lg px-4 py-3 border border-yellow-600 transition-colors">
+          <div className="font-bold text-yellow-200">장비 — {equipment.name}</div>
+          <div className="text-xs text-yellow-400 mt-0.5">{equipment.description}</div>
+          <div className="text-xs text-gray-400 mt-1">{bonusStr(equipment.stats)}</div>
         </button>
-        <button onClick={onAbsorb} className="bg-purple-800 hover:bg-purple-700 font-bold py-3 px-4 rounded-lg transition-colors">
-          💀 능력 흡수 (+STR {Math.floor(enemy.stats.strength * 0.1)}, +AGI {Math.floor(enemy.stats.agility * 0.1)})
+        <button onClick={() => onLootItem(item)}
+          className="bg-teal-900 hover:bg-teal-800 text-left rounded-lg px-4 py-3 border border-teal-600 transition-colors">
+          <div className="font-bold text-teal-200">아이템 — {item.name}</div>
+          <div className="text-xs text-teal-400 mt-0.5">{item.description}</div>
         </button>
-        <button onClick={onSkip} className="bg-gray-700 hover:bg-gray-600 text-gray-300 py-2 px-4 rounded-lg transition-colors">
+        <button onClick={() => setView('titles')}
+          className="bg-purple-900 hover:bg-purple-800 text-left rounded-lg px-4 py-3 border border-purple-600 transition-colors">
+          <div className="font-bold text-purple-200">칭호 획득</div>
+          <div className="text-xs text-purple-400 mt-0.5">적 능력치 기반 칭호 3종 중 선택</div>
+        </button>
+        <button onClick={onSkip} className="bg-gray-800 hover:bg-gray-700 text-gray-400 py-2 px-4 rounded-lg text-sm transition-colors">
           다음 층으로 →
         </button>
       </div>
@@ -755,66 +794,91 @@ function GameOverScreen({ floor, onRetry, onWatchAd }: {
 // Tutorial Screen
 // ════════════════════════════════════════════════════════════
 
-const TUTORIAL_STEPS = [
+const TUTORIAL_STEPS: { title: string; subtitle?: string; body: string[]; note?: string }[] = [
   {
-    title: '검사의 승천에 오신 걸 환영합니다!',
-    icon: '⚔️',
+    title: '세계관',
+    subtitle: '검사들만 사는 탑',
     body: [
-      '탑을 올라 전설의 검사가 되세요.',
-      '매 층마다 적을 만나 전투를 벌입니다.',
-      '각 턴에서 행동을 선택하고 주사위로 결과가 결정됩니다.',
+      '이 탑에 사는 자는 모두 검사입니다.',
+      '연습생부터 원로까지, 탑 안의 모든 존재가 칼을 들고 싸웁니다.',
+      '당신도, 당신이 마주칠 적도, 모두 같은 검사입니다.',
+      '탑을 오를수록 더 강한 검사가 기다립니다.',
     ],
   },
   {
-    title: '거리 시스템',
-    icon: '📏',
+    title: '당신의 목표',
+    subtitle: '탑의 꼭대기로',
     body: [
-      '전투는 1~5의 거리 단계로 이루어집니다.',
-      '밀착(1) ↔ 최원거리(5)로 구분됩니다.',
-      '⚠ 공격은 무기 사정거리 내에서만 명중합니다.',
-      '이동(전진 압박/후퇴/위로 이동/아래로 이동)으로 거리·행을 조절하세요.',
+      '층을 올라가며 마주치는 검사를 쓰러뜨리세요.',
+      '한 번 쓰러지면 끝입니다. 목숨은 하나뿐입니다.',
+      '더 높은 층에 도달할수록 당신의 이름이 기록에 남습니다.',
+      '쓰러진 검사는 유령이 되어 아래 층에 다시 나타납니다.',
+    ],
+    note: '당신이 쓰러지면 당신의 캐릭터가 다음 플레이의 적으로 등장합니다.',
+  },
+  {
+    title: '전투의 흐름',
+    subtitle: '매 턴은 두 번의 선택',
+    body: [
+      '1단계: 행동을 고릅니다 — 공격, 방어, 이동, 마법, 아이템',
+      '2단계: 세부 기술을 고릅니다 — 각 행동마다 2~4가지',
+      '선택이 끝나면 주사위를 굴려 결과가 결정됩니다.',
+      '적도 같은 방식으로 행동을 선택합니다.',
     ],
   },
   {
-    title: '행동 선택',
-    icon: '🎯',
+    title: '행동의 상성',
+    subtitle: '무엇이 무엇을 이기는가',
     body: [
-      '⚔️ 공격 — 사정거리 이내에서만 피해를 줍니다.',
-      '🛡️ 방어 — 적 공격을 막고 반격 기회를 잡습니다.',
-      '👣 이동 — 거리를 조절해 유리한 위치를 선점합니다.',
-      '✨ 마법 — 장거리에 유리, MP가 필요합니다.',
-      '🎒 아이템 — 포션으로 회복하거나 단검을 던집니다.',
+      '공격은 이동 중인 적을 잡고, 방어는 공격을 막습니다.',
+      '마법은 이동으로 피할 수 있고, 방어는 마법에 뚫립니다.',
+      '행동 선택 화면에서 적의 행동 예상을 보여줍니다.',
+      '예상을 읽고 유리한 행동을 고르는 것이 핵심입니다.',
+    ],
+    note: '상성이 맞으면 더 많은 피해를 주거나 피해를 줄일 수 있습니다.',
+  },
+  {
+    title: '세부 기술과 카운터',
+    subtitle: '적의 자세를 읽어라',
+    body: [
+      '행동을 고른 후 세부 기술을 선택합니다.',
+      '화면에서 적이 어떤 자세를 취하는지 힌트로 보여줍니다.',
+      '힌트를 보고 적의 기술을 예측해 카운터를 고르세요.',
+      '완벽히 맞추면 피해가 크게 늘거나 줄어듭니다.',
+    ],
+    note: '처음엔 모릅니다. 여러 번 싸우며 패턴을 익히세요.',
+  },
+  {
+    title: '거리와 위치',
+    subtitle: '전장의 공간을 지배하라',
+    body: [
+      '전투는 1~5 거리 위에서 이루어집니다.',
+      '공격은 무기 사정거리 안에서만 맞습니다.',
+      '가까울수록 공격이 강하고, 멀수록 마법이 강합니다.',
+      '이동으로 거리를 조절하되, 스테미너를 소모하지 않는 유일한 회복 수단입니다.',
+    ],
+    note: '스테미너가 부족하면 능력치가 떨어집니다. 이동으로 스테미너를 유지하세요.',
+  },
+  {
+    title: '주사위와 크리티컬',
+    subtitle: '힘의 차이가 주사위를 바꾼다',
+    body: [
+      '피해량은 주사위로 결정됩니다.',
+      '내 힘이 적보다 강할수록 더 많은 주사위를 굴립니다.',
+      '굴린 주사위가 모두 4 이상이면 합산 크리티컬 — 최대 2.8배 피해.',
+      '서로 공격했을 때는 민첩 또는 주사위로 선제권을 겨룹니다.',
     ],
   },
   {
-    title: '세부 기술 & 주사위',
-    icon: '🎲',
+    title: '컨디션과 성장',
+    subtitle: '매 층마다 달라지는 상태',
     body: [
-      '행동을 고르면 세부 기술을 추가로 선택합니다.',
-      '적의 세부 기술을 완벽히 카운터하면 퍼펙트 대응!',
-      '주사위 6면이 모두 4 이상이면 합산 크리티컬 🔥',
-      '합산 크리티컬은 최대 2.8배 피해를 줍니다.',
+      '층을 이동할 때마다 컨디션이 새로 정해집니다.',
+      '최상(+10%) ~ 최악(-30%) 까지 능력치에 영향을 줍니다.',
+      '장비를 획득하면 능력치가 영구적으로 오릅니다.',
+      '적을 쓰러뜨린 후 장비 획득 / 능력 흡수 / 넘어가기를 선택하세요.',
     ],
-  },
-  {
-    title: '마법 슬롯 시스템',
-    icon: '✨',
-    body: [
-      '게임 시작 시 마법 1개를 랜덤으로 습득합니다.',
-      '적을 처치하면 적의 마법을 흡수할 수 있습니다.',
-      '마법 슬롯은 최대 3개입니다.',
-      '슬롯이 가득 차면 기존 마법과 교체해야 합니다.',
-    ],
-  },
-  {
-    title: '아이템 & 리워드',
-    icon: '🎒',
-    body: [
-      '치유 물약: 소모 후 HP 25 회복 (수량 제한).',
-      '단검 던지기: 거리 4 이내 원거리 공격.',
-      '적 처치 후 장비 획득 / 능력 흡수 / 스킵을 선택합니다.',
-      '생명력(❤️)이 0이 되면 게임 오버입니다.',
-    ],
+    note: '컨디션이 나빠도 포기하지 마세요. 전략으로 극복할 수 있습니다.',
   },
 ];
 
@@ -833,17 +897,24 @@ function TutorialScreen({ onComplete }: { onComplete: () => void }) {
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex flex-col items-center justify-center gap-5 p-8">
-        <div className="text-6xl">{current.icon}</div>
-        <h2 className="text-xl font-bold text-yellow-400 text-center">{current.title}</h2>
-        <ul className="space-y-2 w-full max-w-sm">
+      <div className="flex-1 flex flex-col justify-center gap-4 p-6 overflow-y-auto">
+        <div>
+          <h2 className="text-xl font-bold text-yellow-400">{current.title}</h2>
+          {current.subtitle && <p className="text-sm text-gray-500 mt-0.5">{current.subtitle}</p>}
+        </div>
+        <ul className="space-y-2.5">
           {current.body.map((line, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
+            <li key={i} className="flex items-start gap-2 text-sm text-gray-300 leading-relaxed">
               <span className="text-yellow-600 mt-0.5 shrink-0">▸</span>
               <span>{line}</span>
             </li>
           ))}
         </ul>
+        {current.note && (
+          <p className="text-xs text-gray-500 border-l-2 border-gray-700 pl-3 mt-1 leading-relaxed">
+            {current.note}
+          </p>
+        )}
       </div>
 
       {/* Navigation */}
@@ -852,18 +923,18 @@ function TutorialScreen({ onComplete }: { onComplete: () => void }) {
           onClick={() => setStep(s => Math.max(0, s - 1))}
           disabled={step === 0}
           className="px-4 py-2 rounded-lg text-sm text-gray-400 border border-gray-700 disabled:opacity-30 hover:bg-gray-800 transition-colors">
-          ← 이전
+          이전
         </button>
         <span className="text-xs text-gray-500">{step + 1} / {TUTORIAL_STEPS.length}</span>
         {isLast ? (
           <button onClick={onComplete}
             className="px-5 py-2 rounded-lg text-sm font-bold bg-red-700 hover:bg-red-600 text-white transition-all hover:scale-105 active:scale-95">
-            게임 시작! ⚔️
+            게임 시작
           </button>
         ) : (
           <button onClick={() => setStep(s => s + 1)}
             className="px-4 py-2 rounded-lg text-sm font-bold bg-yellow-700 hover:bg-yellow-600 text-white transition-colors">
-            다음 →
+            다음
           </button>
         )}
       </div>
@@ -1043,6 +1114,7 @@ function MagicAbsorbPanel({ newSpell, currentSlots, onSwap, onSkip }: {
 }) {
   const spellEmoji: Record<MagicSpell, string> = {
     '화염 쇄도': '🔥', '암흑 속박': '🌑', '회복술': '💚', '빙결 창': '❄️',
+    '번개 일격': '⚡', '바람 쇄도': '🌀',
   };
   return (
     <div className="flex flex-col items-center gap-4 p-6 bg-gray-900 rounded-lg text-white">
@@ -1147,6 +1219,7 @@ export default function SwordmastersAscent() {
   const [playerMain, setPlayerMain] = useState<ActionType | null>(null);
   const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
   const [diceRolling, setDiceRolling] = useState(false);
+  const [hitFlash, setHitFlash] = useState<'player' | 'enemy' | 'both' | null>(null);
 
   const [stats, setStats] = useState({ floorsCleared:0, bossesKilled:0, perfectBlocks:0 });
   const [pendingMagicAbsorb, setPendingMagicAbsorb] = useState<MagicSpell | null>(null);
@@ -1310,7 +1383,7 @@ export default function SwordmastersAscent() {
     setFloor(nf); setEnemy(e); setPlayer(pWithCond); setPhase('battle');
     setPlayerPos(1); setEnemyPos(4); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
     const condMsg = newCond !== 'normal' ? ` (컨디션: ${CONDITION_LABELS[newCond]})` : '';
-    addLog(`--- ${nf}층 ---  적: ${e.name}${e.isLegacy ? ' 👻' : ''}${condMsg}`);
+    addLog(`=== ${nf}층 ===  적: ${e.name}${e.isLegacy ? ' (유령)' : ''}${condMsg}`);
     spawnIntent(e, COMBAT_ROW_DEFAULT, COMBAT_ROW_DEFAULT, 1, 4, pWithCond.hp, pWithCond.maxHp);
   }, [legacy, addLog, spawnIntent]);
 
@@ -1355,31 +1428,52 @@ export default function SwordmastersAscent() {
       setEnemyPos(result.newEnemyPos);
       setPlayerRow(result.newPlayerRow);
       setEnemyRow(result.newEnemyRow);
+      // 행/위치 이동 서술
       if (result.newDistance !== distance) {
-        addLog(`  위치: ${playerPos}→${result.newPlayerPos} / 적: ${enemyPos}→${result.newEnemyPos} (거리 ${distance}→${result.newDistance})`);
+        const moved = result.newDistance < distance ? '거리가 좁혀졌다.' : '거리가 벌어졌다.';
+        addLog(`  ${moved}`);
       }
-      if (result.newPlayerRow !== playerRow) addLog(`  ↕ 행 이동 ${playerRow}→${result.newPlayerRow}`);
-      if (result.newEnemyRow  !== enemyRow)  addLog(`  ↕ 적 행 이동 ${enemyRow}→${result.newEnemyRow}`);
-      if (result.playerRowMiss) showFloat('빗나감!', 'miss', 'enemy');
-      if (result.enemyRowMiss)  showFloat('회피!',   'miss', 'player');
+      if (result.newPlayerRow !== playerRow) addLog(`  발을 옆으로 옮겨 행을 바꿨다.`);
+      if (result.newEnemyRow  !== enemyRow)  addLog(`  적이 옆으로 이동했다.`);
+      if (result.playerRowMiss) { showFloat('빗나감!', 'miss', 'enemy'); addLog(`  행 이동으로 공격이 허공을 갈랐다.`); }
+      if (result.enemyRowMiss)  { showFloat('회피!',   'miss', 'player'); addLog(`  행 이동으로 적의 공격을 피했다.`); }
 
-      const subInfo = `[${playerMain}·${sub}] vs [${intent.mainAction}·${intent.subAction}]`;
-      addLog(`${subInfo}`);
-      addLog(`  ${result.message} | ${result.playerDice.mode === 'sum' ? `합산🔥${result.playerDice.sum}` : `최고⚀${result.playerDice.kept}`}`);
-      if (result.damageDealt > 0) addLog(`  적 피해 -${result.damageDealt}`);
-      if (result.damageTaken > 0) addLog(`  내 피해 -${result.damageTaken}`);
+      // 서술형 메인 로그
+      addLog(`  ${result.message}`);
 
+      // 주사위 결과 (간략)
+      const pDiceRolls = result.playerDice.rolls.join(' ');
+      const eDiceRolls = result.enemyDice.rolls.join(' ');
+      const pCrit = result.playerDice.mode === 'sum' ? ' — 전체 크리티컬!' : '';
+      const eCrit = result.enemyDice.mode === 'sum' ? ' — 전체 크리티컬!' : '';
+      addLog(`  주사위 [${pDiceRolls}]${pCrit}  /  적 [${eDiceRolls}]${eCrit}`);
+
+      // FloatingText — 수치는 여기서만
       const playerStamDelta = getStaminaDelta(playerMain);
       const enemyStamDelta = getStaminaDelta(intent.mainAction);
-      if (playerStamDelta > 0) { addLog(`⚡ 이동으로 스테미너 +${playerStamDelta}`); showFloat(`⚡+${playerStamDelta}`, 'info', 'player'); }
-      else if (playerStamDelta < 0) addLog(`⚡ 스테미너 -${Math.abs(playerStamDelta)}`);
-      if (enemyStamDelta > 0) addLog(`⚡ 적 이동으로 스테미너 +${enemyStamDelta}`);
-      else if (enemyStamDelta < 0) addLog(`⚡ 적 스테미너 -${Math.abs(enemyStamDelta)}`);
+      if (playerStamDelta > 0) showFloat(`체력 +${playerStamDelta}`, 'info', 'player');
 
-      if (result.damageDealt > 0) showFloat(result.isCritical ? `합산! ${result.damageDealt}` : `-${result.damageDealt}`, result.isCritical ? 'critical' : 'damage', 'enemy');
+      if (result.damageDealt > 0) showFloat(
+        result.isCritical ? `CRIT! ${result.damageDealt}` : `${result.damageDealt}`,
+        result.isCritical ? 'critical' : 'damage', 'enemy',
+      );
       if (result.damageTaken > 0) showFloat(`-${result.damageTaken}`, 'damage', 'player');
-      if (result.healAmount && result.healAmount > 0) { showFloat(`+${result.healAmount} 회복`, 'heal', 'player'); addLog(`  ❤️ +${result.healAmount} 회복`); }
-      if (result.damageTaken === 0 && result.damageDealt === 0 && result.quality === 'perfect') showFloat('완벽 차단!', 'info', 'player');
+
+      // 피격 플래시
+      const flash = result.damageDealt > 0 && result.damageTaken > 0 ? 'both'
+        : result.damageDealt > 0 ? 'enemy'
+        : result.damageTaken > 0 ? 'player' : null;
+      if (flash) {
+        setHitFlash(flash);
+        setTimeout(() => setHitFlash(null), 350);
+      }
+      if (result.healAmount && result.healAmount > 0) {
+        showFloat(`+${result.healAmount}`, 'heal', 'player');
+        addLog(`  체력이 회복되었다.`);
+      }
+      if (result.damageTaken === 0 && result.damageDealt === 0 && result.quality === 'perfect') {
+        showFloat('완벽 차단!', 'info', 'player');
+      }
 
       let newStats = { ...stats };
       if (result.quality === 'perfect' && playerMain === '방어') newStats.perfectBlocks++;
@@ -1404,8 +1498,7 @@ export default function SwordmastersAscent() {
           newInv.splice(usedIdx, 1);
           updatedPlayer = { ...updatedPlayer, inventory: newInv };
           const remaining = newInv.filter(it => it.name === sub).length;
-          const emoji = sub === '치유 물약' ? '🧪' : '🗡️';
-          addLog(`${emoji} ${sub} 소모 (남은 수량: ${remaining})`);
+          addLog(`  ${sub}을 사용했다. (남은 ${remaining}개)`)
         }
       }
       setMagicCooldown(nextCooldown);
@@ -1417,27 +1510,27 @@ export default function SwordmastersAscent() {
           bossesKilled: isBoss ? newStats.bossesKilled + 1 : newStats.bossesKilled };
         if (newStats.perfectBlocks >= 10 && !updatedPlayer.titles.find(t => t.id === 'weapon_breaker')) {
           updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='weapon_breaker') ?? TITLES_DATA[0]), equipped:false }] };
-          addLog('🏅 칭호: [무기 파괴자]');
+          addLog('완벽한 방어로 무기 파괴자 칭호를 얻었다.');
         }
         if (newStats.floorsCleared >= 5 && !updatedPlayer.titles.find(t => t.id === 'tower_climber')) {
           updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='tower_climber') ?? TITLES_DATA[0]), equipped:false }] };
-          addLog('🏅 칭호: [탑 등반가]');
+          addLog('5층을 넘어서며 탑 등반가 칭호를 얻었다.');
         }
         if (newStats.floorsCleared >= 10 && !updatedPlayer.titles.find(t => t.id === 'magic_adept')) {
           updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='magic_adept') ?? TITLES_DATA[0]), equipped:false }] };
-          addLog('🏅 칭호: [비전 연구자]');
+          addLog('10층을 돌파하며 비전 연구자 칭호를 얻었다.');
         }
         if (isBoss && !updatedPlayer.titles.find(t => t.id === 'boss_slayer')) {
           updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='boss_slayer') ?? TITLES_DATA[0]), equipped:false }] };
-          addLog('🏅 칭호: [보스 사냥꾼]');
+          addLog('강적을 쓰러뜨리며 보스 사냥꾼 칭호를 얻었다.');
         }
         if (updatedPlayer.hp <= player.maxHp * 0.25 && !updatedPlayer.titles.find(t => t.id === 'survivor')) {
           updatedPlayer = { ...updatedPlayer, titles: [...updatedPlayer.titles, { ...(TITLES_DATA.find(t=>t.id==='survivor') ?? TITLES_DATA[0]), equipped:false }] };
-          addLog('🏅 칭호: [생존자] (체력 25% 이하에서 승리)');
+          addLog('가까스로 살아남아 생존자 칭호를 얻었다.');
         }
         setStats(newStats);
         updateHighScore(floor);
-        addLog(`✅ ${enemy.name} 처치!`);
+        addLog(`${enemy.name}이 쓰러졌다.`);
 
         // 마법 흡수
         const enemySpell = updatedEnemy.magicSlots.length > 0 ? updatedEnemy.magicSlots[0] : null;
@@ -1445,10 +1538,10 @@ export default function SwordmastersAscent() {
           if (updatedPlayer.magicSlots.length < 3) {
             const newSlots = [...updatedPlayer.magicSlots, enemySpell] as MagicSpell[];
             updatedPlayer = { ...updatedPlayer, magicSlots: newSlots };
-            addLog(`✨ ${enemySpell} 마법 흡수! (슬롯 ${newSlots.length}/3)`);
+            addLog(`적의 ${enemySpell} 기운이 몸에 스몄다.`);
           } else {
             setPendingMagicAbsorb(enemySpell);
-            addLog(`✨ ${enemySpell} 획득 가능 — 리워드 화면에서 슬롯 교체`);
+            addLog(`적의 ${enemySpell} 기운이 남아있다.`);
           }
         }
 
@@ -1462,7 +1555,7 @@ export default function SwordmastersAscent() {
         // 2층 이상에서 사망 시 아래 층에 이름을 가진 몬스터로 저장
         if (floor >= 2) {
           addFloorGhost(floor - 1, updatedPlayer);
-          addLog(`👻 ${updatedPlayer.name} — ${floor - 1}층에 출몰`);
+          addLog(`${updatedPlayer.name} — ${floor - 1}층에 유령으로 출몰`);
         }
         setLegacy(p => [...p.slice(-4), {
           ...updatedPlayer,
@@ -1472,7 +1565,7 @@ export default function SwordmastersAscent() {
           hp: updatedPlayer.maxHp, mp: updatedPlayer.maxMp,
         }]);
         updateHighScore(floor);
-        addLog('💀 패배!');
+        addLog('패배');
         setPlayer({ ...updatedPlayer, hp: 0 });
         setEnemy(updatedEnemy);
         setTimeout(() => setPhase('gameover'), 1200);
@@ -1556,14 +1649,21 @@ export default function SwordmastersAscent() {
             if (eq.stats.strength) p = { ...p, stats: { ...p.stats, strength: p.stats.strength + (eq.stats.strength??0) }};
             if (eq.stats.agility)  p = { ...p, stats: { ...p.stats, agility:  p.stats.agility  + (eq.stats.agility ??0) }};
             if (eq.stats.armor)    p = { ...p, stats: { ...p.stats, armor: Math.min(80, p.stats.armor+(eq.stats.armor??0)) }};
-            addLog(`🗡️ ${eq.name} 획득`); nextFloor(p, floor);
+            if (eq.range && eq.range > p.weaponRange) p = { ...p, weaponRange: eq.range };
+            addLog(`${eq.name}을 손에 쥐었다.`); nextFloor(p, floor);
           }}
-          onAbsorb={() => {
-            const p = { ...player, stats: { ...player.stats,
-              strength: player.stats.strength + Math.floor(enemy.stats.strength * 0.1),
-              agility:  player.stats.agility  + Math.floor(enemy.stats.agility  * 0.1),
-            }};
-            addLog('💀 흡수!'); nextFloor(p, floor);
+          onLootItem={it => {
+            const p = { ...player, inventory: [...player.inventory, it] };
+            addLog(`${it.name}을 챙겼다.`); nextFloor(p, floor);
+          }}
+          onLootTitle={t => {
+            const bonus = t.bonus as Partial<Character['stats']>;
+            let p = { ...player, titles: [...player.titles, t] };
+            if (bonus.strength)  p = { ...p, stats: { ...p.stats, strength:  p.stats.strength  + (bonus.strength  ?? 0) }};
+            if (bonus.agility)   p = { ...p, stats: { ...p.stats, agility:   p.stats.agility   + (bonus.agility   ?? 0) }};
+            if (bonus.armor)     p = { ...p, stats: { ...p.stats, armor:     Math.min(80, p.stats.armor + (bonus.armor ?? 0)) }};
+            if (bonus.critChance)p = { ...p, stats: { ...p.stats, critChance: p.stats.critChance + (bonus.critChance ?? 0) }};
+            addLog(`칭호를 얻었다 — ${t.name}.`); nextFloor(p, floor);
           }}
           onSkip={() => nextFloor(player, floor)}
         />
@@ -1605,6 +1705,7 @@ export default function SwordmastersAscent() {
           enemy={enemy}
           player={player}
           floatingTexts={floating}
+          hitFlash={hitFlash}
         />
 
         {/* Main content */}
