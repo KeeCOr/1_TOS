@@ -1984,6 +1984,9 @@ export default function SwordmastersAscent() {
     <div className="w-[1280px] h-[720px] relative overflow-hidden"
       style={{ background: '#050508' }}>
 
+      {/* ══════ 배경 이미지 ══════ */}
+      <img src="/bg/background.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none" />
+
       {/* ══════ 캐릭터 이미지 레이어 ══════ */}
       {/* 플레이어 — 왼쪽 */}
       <div className="absolute left-0 top-0 h-full pointer-events-none" style={{ width: '52%' }}>
@@ -1993,10 +1996,10 @@ export default function SwordmastersAscent() {
       {/* 적 — 오른쪽 */}
       <div className="absolute right-0 top-0 h-full pointer-events-none flex items-end justify-end" style={{ width: '52%' }}>
         <CharImage
-          src={enemy.isLegacy ? '/chars/ghost.png' : `/chars/${enemy.id}.png`}
-          fallback={enemy.isLegacy ? '👻' : enemy.isBoss ? '💀' : '⚔️'}
+          src="/enemy/enemy.png"
+          fallback={enemy.isBoss ? '💀' : '⚔️'}
           size={600}
-          glow={eFlash ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.2)'} flash={eFlash} />
+          glow={eFlash ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.2)'} flash={eFlash} removeWhiteBg />
       </div>
 
       {/* ══════ 그라디언트 오버레이 ══════ */}
