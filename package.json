@@ -1,6 +1,6 @@
 {
-  "name": "swordmasters-ascent",
-  "version": "1.5.9",
+  "name": "tos-swordmasters-ascent",
+  "version": "1.5.13",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -13,7 +13,7 @@
     "html": "next build && node scripts/build-singlefile.js"
   },
   "build": {
-    "appId": "com.swordmasters.ascent",
+    "appId": "com.tos.swordmasters",
     "productName": "T of Sword",
     "copyright": "SwordmastersAscent",
     "directories": {
@@ -53,7 +53,6 @@
     "@types/react-dom": "^19",
     "electron": "^36.9.5",
     "electron-builder": "^26.8.1",
-    "esbuild": "^0.27.4",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",

@@ -26,7 +26,6 @@
     font-size: 14px;
     line-height: 1.7;
   }
-  /* Layout */
   #sidebar {
     position: fixed;
     top: 0; left: 0;
@@ -73,7 +72,6 @@
     max-width: 900px;
     padding: 40px 48px 80px;
   }
-  /* Typography */
   h1 {
     font-size: 26px;
     color: var(--accent);
@@ -121,7 +119,6 @@
     margin: 12px 0;
     line-height: 1.5;
   }
-  /* Tables */
   .table-wrap { overflow-x: auto; margin: 12px 0; }
   table {
     width: 100%;
@@ -144,13 +141,11 @@
   }
   tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
   tr:hover td { background: rgba(88,166,255,0.04); }
-  /* Result matrix special */
   .matrix th, .matrix td { text-align: center; font-size: 12px; }
   .win { color: var(--green); font-weight: 600; }
   .lose { color: var(--red); }
   .draw { color: var(--muted); }
   .block { color: var(--accent); }
-  /* Tags/badges */
   .badge {
     display: inline-block;
     padding: 2px 8px;
@@ -158,16 +153,15 @@
     font-size: 11px;
     font-weight: 600;
   }
-  .badge-boss { background: rgba(248,81,73,0.2); color: var(--red); }
+  .badge-boss   { background: rgba(248,81,73,0.2);  color: var(--red); }
   .badge-normal { background: rgba(63,185,80,0.15); color: var(--green); }
-  .badge-special { background: rgba(188,140,255,0.15); color: var(--purple); }
-  /* Section anchors */
+  .badge-special{ background: rgba(188,140,255,0.15); color: var(--purple); }
+  .badge-new    { background: rgba(88,166,255,0.2); color: var(--accent2); }
+  .badge-tier   { background: rgba(212,160,23,0.18); color: var(--accent); }
   section { scroll-margin-top: 20px; }
-  /* Back to top */
   #top-btn {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
+    bottom: 24px; right: 24px;
     background: var(--accent);
     color: #000;
     border: none;
@@ -180,11 +174,9 @@
     z-index: 200;
   }
   #top-btn.show { opacity: 1; }
-  /* Scrollbar */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: var(--bg); }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-  /* Flow diagram */
   .flow {
     display: flex;
     flex-wrap: wrap;
@@ -201,12 +193,28 @@
     color: var(--text);
   }
   .flow-arrow { color: var(--accent); font-size: 16px; }
-  /* Stamina bar */
   .bar-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
   .bar-label { width: 80px; font-size: 12px; color: var(--muted); }
   .bar-track { flex: 1; height: 8px; background: #1c2128; border-radius: 4px; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 4px; }
   .bar-val { width: 60px; font-size: 12px; text-align: right; }
+  .tier-block {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+  .tier-header {
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .tier-t1 { background: rgba(63,185,80,0.12); color: var(--green); }
+  .tier-t2 { background: rgba(88,166,255,0.12); color: var(--accent2); }
+  .tier-t3 { background: rgba(212,160,23,0.12); color: var(--accent); }
   @media (max-width: 768px) {
     #sidebar { display: none; }
     main { margin-left: 0; padding: 24px 20px 60px; }
@@ -218,7 +226,7 @@
 <nav id="sidebar">
   <div class="logo">
     <div class="title">검사의 승천</div>
-    <div class="sub">기획서 v1.5.3</div>
+    <div class="sub">기획서 v1.5.4</div>
   </div>
   <nav>
     <div class="section-label">개요</div>
@@ -237,13 +245,14 @@
     <a href="#character">4. 캐릭터 시스템</a>
     <a href="#condition">— 컨디션</a>
     <a href="#stats">— 능력치</a>
-    <a href="#titles">— 타이틀</a>
+    <a href="#titles">— 칭호 시스템</a>
     <div class="section-label">적</div>
     <a href="#enemies">5. 적 시스템</a>
     <a href="#ai">— AI 판단</a>
     <div class="section-label">진행</div>
     <a href="#progression">6. 진행 시스템</a>
-    <a href="#magic">7. 마법 & 아이템</a>
+    <a href="#equipment">— 장비 티어</a>
+    <a href="#magic">7. 마법 &amp; 아이템</a>
     <a href="#save">8. 저장</a>
     <a href="#numbers">9. 수치 레퍼런스</a>
   </nav>
@@ -251,7 +260,7 @@
 
 <main>
   <h1>Swordmasters Ascent 기획서</h1>
-  <p class="doc-meta">최종 수정: 2026-04-21 &nbsp;|&nbsp; 버전: 1.5.3 &nbsp;|&nbsp; <code>/game-designer</code> 에이전트로 자동 갱신</p>
+  <p class="doc-meta">최종 수정: 2026-04-21 &nbsp;|&nbsp; 버전: 1.5.4 &nbsp;|&nbsp; <code>/game-designer</code> 에이전트로 자동 갱신</p>
 
   <!-- ============================================================ -->
   <section id="overview">
@@ -290,11 +299,11 @@
       <table>
         <tr><th>Phase</th><th>설명</th></tr>
         <tr><td><code>start</code></td><td>타이틀 화면. 새 게임 / 이어하기(3슬롯) / 기록</td></tr>
-        <tr><td><code>tutorial</code></td><td>선택적 튜토리얼 화면 (세계관 → 목표 → 시스템 단계별 설명)</td></tr>
+        <tr><td><code>tutorial</code></td><td>선택적 튜토리얼 (세계관 → 목표 → 전투흐름 → 시스템 8단계)</td></tr>
         <tr><td><code>naming</code></td><td>이름 입력 (최대 10자) + 8개 프리셋</td></tr>
-        <tr><td><code>stat_roll</code></td><td>능력치 주사위 굴림 및 분배</td></tr>
+        <tr><td><code>stat_roll</code></td><td>능력치 주사위 굴림 및 분배, 재굴림 가능</td></tr>
         <tr><td><code>battle</code></td><td>메인 전투 화면 (select_main → select_sub → rolling → result)</td></tr>
-        <tr><td><code>reward</code></td><td>층 클리어 후 보상 선택</td></tr>
+        <tr><td><code>reward</code></td><td>층 클리어 후 보상 선택 (장비 / 아이템 / 칭호 / 건너뛰기)</td></tr>
         <tr><td><code>gameover</code></td><td>사망 화면. 최고 기록 갱신 시 표시</td></tr>
       </table>
     </div>
@@ -320,7 +329,7 @@
           <tr><td>5</td><td>최원거리</td><td style="color:#bc8cff">■ 보라</td></tr>
         </table>
       </div>
-      <p style="margin-top:10px;color:var(--muted);font-size:13px">플레이어 시작 위치: 1 &nbsp;|&nbsp; 적 시작 위치: 4 (거리 3). 행은 이동 서브액션으로만 변경 가능.</p>
+      <p style="margin-top:10px;color:var(--muted);font-size:13px">플레이어 시작 위치: 1 &nbsp;|&nbsp; 적 시작 위치: 4 (거리 3). 행은 이동 서브액션으로만 변경. <strong>공격은 같은 행에만 명중</strong>. 마법·아이템(투척)은 행 무관.</p>
     </section>
 
     <section id="actions">
@@ -328,11 +337,11 @@
       <div class="table-wrap">
         <table>
           <tr><th>액션</th><th>스테미너</th><th>특징</th></tr>
-          <tr><td><strong>공격</strong></td><td style="color:var(--red)">-13</td><td>근거리에서 강함, 원거리 약화</td></tr>
+          <tr><td><strong>공격</strong></td><td style="color:var(--red)">-13</td><td>근거리에서 강함, 원거리 약화. 같은 행에만 명중</td></tr>
           <tr><td><strong>이동</strong></td><td style="color:var(--green)">+4</td><td>유일한 스테미너 회복 수단</td></tr>
           <tr><td><strong>방어</strong></td><td style="color:var(--red)">-6</td><td>적 공격을 막거나 반격</td></tr>
-          <tr><td><strong>마법 사용</strong></td><td style="color:var(--red)">-16</td><td>원거리에서 강함, 쿨다운 있음</td></tr>
-          <tr><td><strong>아이템 사용</strong></td><td style="color:var(--red)">-6</td><td>치유 또는 원거리 공격</td></tr>
+          <tr><td><strong>마법 사용</strong></td><td style="color:var(--red)">-16</td><td>원거리에서 강함, 행 무관, 쿨다운 있음</td></tr>
+          <tr><td><strong>아이템 사용</strong></td><td style="color:var(--red)">-6</td><td>치유 또는 원거리 투척 (행 무관)</td></tr>
         </table>
       </div>
 
@@ -340,22 +349,22 @@
       <div style="max-width:400px">
         <div class="bar-row">
           <div class="bar-label">이동 +4</div>
-          <div class="bar-track"><div class="bar-fill" style="width:27%;background:#3fb950"></div></div>
+          <div class="bar-track"><div class="bar-fill" style="width:25%;background:#3fb950"></div></div>
           <div class="bar-val" style="color:var(--green)">회복</div>
         </div>
         <div class="bar-row">
           <div class="bar-label">방어 -6</div>
-          <div class="bar-track"><div class="bar-fill" style="width:40%;background:#f85149"></div></div>
+          <div class="bar-track"><div class="bar-fill" style="width:37.5%;background:#f85149"></div></div>
           <div class="bar-val" style="color:var(--red)">-6</div>
         </div>
         <div class="bar-row">
           <div class="bar-label">아이템 -6</div>
-          <div class="bar-track"><div class="bar-fill" style="width:40%;background:#f85149"></div></div>
+          <div class="bar-track"><div class="bar-fill" style="width:37.5%;background:#f85149"></div></div>
           <div class="bar-val" style="color:var(--red)">-6</div>
         </div>
         <div class="bar-row">
           <div class="bar-label">공격 -13</div>
-          <div class="bar-track"><div class="bar-fill" style="width:87%;background:#f85149"></div></div>
+          <div class="bar-track"><div class="bar-fill" style="width:81%;background:#f85149"></div></div>
           <div class="bar-val" style="color:var(--red)">-13</div>
         </div>
         <div class="bar-row">
@@ -367,7 +376,7 @@
     </section>
 
     <section id="subactions">
-      <h3>3.3 서브액션 (16개)</h3>
+      <h3>3.3 서브액션 (21개)</h3>
 
       <h4>공격 서브 (3개)</h4>
       <div class="table-wrap">
@@ -395,12 +404,12 @@
           <tr><th>서브액션</th><th>설명</th><th>자세 힌트</th><th>카운터</th><th>조건</th></tr>
           <tr><td>전진 압박</td><td>거리 -1</td><td><em>"발을 크게 내딛으며 앞으로 밀어붙였다"</em></td><td>위로 이동</td><td>위치 &gt; 1</td></tr>
           <tr><td>후퇴</td><td>거리 +1</td><td><em>"뒷발을 당기며 거리를 벌렸다"</em></td><td>전진 압박</td><td>위치 &lt; 5</td></tr>
-          <tr><td>위로 이동</td><td>행 -1</td><td><em>"옆으로 크게 발을 옮기며 위치를 바꿨다"</em></td><td>아래로 이동</td><td>행 &gt; 1</td></tr>
-          <tr><td>아래로 이동</td><td>행 +1</td><td><em>"낮게 자세를 잡으며 아래쪽으로 이동했다"</em></td><td>위로 이동</td><td>행 &lt; 3</td></tr>
+          <tr><td>위로 이동</td><td>행 -1 (위로)</td><td><em>"옆으로 크게 발을 옮기며 위치를 바꿨다"</em></td><td>아래로 이동</td><td>행 &gt; 1</td></tr>
+          <tr><td>아래로 이동</td><td>행 +1 (아래로)</td><td><em>"낮게 자세를 잡으며 아래쪽으로 이동했다"</em></td><td>위로 이동</td><td>행 &lt; 3</td></tr>
         </table>
       </div>
 
-      <h4>마법 서브 (4개)</h4>
+      <h4>마법 서브 (6개) <span class="badge badge-new">v1.5.4 확장</span></h4>
       <div class="table-wrap">
         <table>
           <tr><th>서브액션</th><th>설명</th><th>자세 힌트</th><th>카운터</th></tr>
@@ -408,18 +417,23 @@
           <tr><td>암흑 속박</td><td>속박 마법</td><td><em>"손끝에서 검은 연기가 소용돌이치기 시작했다"</em></td><td>흘려막기</td></tr>
           <tr><td>회복술</td><td>체력 회복</td><td><em>"몸 주위에 희미한 빛이 감돌기 시작했다"</em></td><td>세로 베기</td></tr>
           <tr><td>빙결 창</td><td>얼음 창 투척</td><td><em>"팔을 들어올리며 차가운 기운이 모였다"</em></td><td>후퇴</td></tr>
+          <tr><td>번개 일격 ★</td><td>번개 마법 공격</td><td><em>"팔끝에서 파란 전기가 지직거리기 시작했다"</em></td><td>올려막기</td></tr>
+          <tr><td>바람 쇄도 ★</td><td>바람 마법 공격</td><td><em>"양손이 바람을 끌어모으며 소용돌이쳤다"</em></td><td>전진 압박</td></tr>
         </table>
       </div>
 
-      <h4>아이템 서브 (2개)</h4>
+      <h4>아이템 서브 (5개) <span class="badge badge-new">v1.5.4 확장</span></h4>
       <div class="table-wrap">
         <table>
-          <tr><th>서브액션</th><th>설명</th><th>자세 힌트</th><th>카운터</th></tr>
-          <tr><td>치유 물약</td><td>HP 25 회복</td><td><em>"허리춤에서 무언가를 꺼내 들었다"</em></td><td>전진 압박</td></tr>
-          <tr><td>단검 던지기</td><td>사거리 4 원거리 공격</td><td><em>"작은 단검을 손에 쥐고 팔을 뒤로 당겼다"</em></td><td>정면 막기</td></tr>
+          <tr><th>서브액션</th><th>설명</th><th>자세 힌트</th><th>카운터</th><th>사거리</th></tr>
+          <tr><td>치유 물약</td><td>HP +25 회복</td><td><em>"허리춤에서 무언가를 꺼내 들었다"</em></td><td>전진 압박</td><td>—</td></tr>
+          <tr><td>단검 던지기</td><td>원거리 단검</td><td><em>"작은 단검을 손에 쥐고 팔을 뒤로 당겼다"</em></td><td>정면 막기</td><td>4</td></tr>
+          <tr><td>폭발 물약 ★</td><td>방어 무시 고정 피해 32</td><td><em>"주머니에서 붉게 빛나는 구슬을 꺼내 들었다"</em></td><td>후퇴</td><td>5</td></tr>
+          <tr><td>강화 단검 ★</td><td>강력한 단검 투척 (strength × 1.2)</td><td><em>"무거운 단검을 손에 쥐고 조준했다"</em></td><td>흘려막기</td><td>4</td></tr>
+          <tr><td>대형 치유 물약 ★</td><td>HP +50 대량 회복</td><td><em>"큼지막한 물약을 꺼내 뚜껑을 열었다"</em></td><td>전진 압박</td><td>—</td></tr>
         </table>
       </div>
-      <blockquote>힌트 표시: 플레이어는 적의 행동 이름을 볼 수 없고 자세 힌트만 표시됨. 불가능한 이동(위치·행 경계 초과)은 예측 목록에서 제외.</blockquote>
+      <blockquote>힌트 표시: 플레이어는 적 행동 이름을 볼 수 없고 자세 힌트만 표시됨. 불가능한 이동(위치·행 경계)은 예측 목록에서 제외. 투척 아이템 vs 적 이동: 전진하는 적에게는 항상 빗나감.</blockquote>
     </section>
 
     <section id="result-table">
@@ -476,7 +490,6 @@
           <tr><td>힘 주사위 차이 -2 ~ 2</td><td>팽팽한 교전 (양쪽 50%)</td></tr>
         </table>
       </div>
-      <blockquote>단검 던지기 vs 적 이동: 항상 빗나감 ("전진하는 적의 기세에 밀려 빗나갔다")</blockquote>
     </section>
 
     <section id="distance">
@@ -543,24 +556,39 @@
           <tr><th>능력치</th><th>역할</th></tr>
           <tr><td><code>strength</code></td><td>공격 데미지, 주사위 개수 결정</td></tr>
           <tr><td><code>agility</code></td><td>이동/방어 주사위 보너스, 민첩 선제권 판정</td></tr>
-          <tr><td><code>armor</code></td><td>받는 데미지 감소 (armor/100 비율)</td></tr>
+          <tr><td><code>armor</code></td><td>받는 데미지 감소 (armor / 100 비율)</td></tr>
           <tr><td><code>critChance</code></td><td>합산 크리티컬 확률에 영향</td></tr>
-          <tr><td><code>elements</code> (fire/water/wind/earth/dark)</td><td>마법 데미지 계산</td></tr>
+          <tr><td><code>elements</code></td><td>fire / water / wind / earth / dark — 마법 데미지 계산</td></tr>
         </table>
       </div>
     </section>
 
     <section id="titles">
-      <h3>4.4 타이틀 시스템 (6개)</h3>
+      <h3>4.4 칭호 시스템</h3>
+
+      <h4>업적 칭호 (6개, 자동 획득)</h4>
       <div class="table-wrap">
         <table>
-          <tr><th>타이틀</th><th>획득 조건</th><th>보너스</th></tr>
+          <tr><th>칭호</th><th>획득 조건</th><th>보너스</th></tr>
           <tr><td>신참자</td><td>처음 전투</td><td>없음</td></tr>
           <tr><td>무기 파괴자</td><td>완벽 방어 10회</td><td>strength+5, critChance+5</td></tr>
           <tr><td>탑 등반가</td><td>5층 돌파</td><td>agility+5</td></tr>
           <tr><td>보스 사냥꾼</td><td>보스 처치</td><td>strength+10, critChance+5</td></tr>
           <tr><td>비전 연구자</td><td>10층 돌파</td><td>critChance+5, agility+5 (마법 쿨다운 0)</td></tr>
-          <tr><td>생존자</td><td>생명력 1로 승리</td><td>armor+10</td></tr>
+          <tr><td>생존자</td><td>체력 25% 이하로 승리</td><td>armor+10</td></tr>
+        </table>
+      </div>
+
+      <h4>전투 칭호 (동적 생성) <span class="badge badge-new">v1.5.4 추가</span></h4>
+      <p style="color:var(--muted);font-size:13px;margin-bottom:8px">적 처치 후 보상 화면에서 적 능력치 기반으로 3개 생성, 플레이어가 1개 선택.</p>
+      <div class="table-wrap">
+        <table>
+          <tr><th>생성 조건</th><th>칭호 예시</th><th>보너스</th></tr>
+          <tr><td>적 strength 기반</td><td>{적 이름} 격파자</td><td>strength += 적strength × 0.15</td></tr>
+          <tr><td>적 agility 기반</td><td>신속의 사냥꾼 / 날렵한 검사</td><td>agility += 적agility × 0.15</td></tr>
+          <tr><td>적 armor 기반</td><td>철벽 파괴자 / 방어 격파자</td><td>armor += 적armor × 0.25</td></tr>
+          <tr><td>적 최강 속성 기반</td><td>{속성}의 계승자</td><td>critChance += 적critChance × 0.3</td></tr>
+          <tr><td>보스 처치</td><td>보스 처치자</td><td>strength+8, agility+5, critChance+5</td></tr>
         </table>
       </div>
     </section>
@@ -570,7 +598,7 @@
   <section id="enemies">
     <h2>5. 적 시스템</h2>
 
-    <h3>5.1 일반 적 (6개)</h3>
+    <h3>5.1 일반 적 (8개) <span class="badge badge-new">v1.5.4 +2종</span></h3>
     <div class="table-wrap">
       <table>
         <tr><th>이름</th><th>등장 층</th><th>HP</th><th>str</th><th>agi</th><th>armor</th><th>사거리</th><th>행동 패턴</th></tr>
@@ -580,6 +608,8 @@
         <tr><td>검사 기사</td><td>3~7</td><td>150</td><td>35</td><td>10</td><td>28</td><td>2</td><td>방어45 공격30 마법10 아이템5</td></tr>
         <tr><td>검사 방랑자</td><td>4~8</td><td>100</td><td>20</td><td>38</td><td>8</td><td>2</td><td>이동45 공격25 마법20 방어10</td></tr>
         <tr><td>검사 결투사</td><td>6~99</td><td>130</td><td>32</td><td>28</td><td>14</td><td>2</td><td>공격30 방어30 마법20 이동20</td></tr>
+        <tr><td><span class="badge badge-new">NEW</span> 검사 집행관</td><td>8~15</td><td>180</td><td>45</td><td>30</td><td>22</td><td>2</td><td>공격50 방어25 이동15 마법10</td></tr>
+        <tr><td><span class="badge badge-new">NEW</span> 검사 마도사</td><td>11~99</td><td>110</td><td>15</td><td>22</td><td>10</td><td>4</td><td>마법70 이동15 방어10 공격5</td></tr>
       </table>
     </div>
 
@@ -640,26 +670,70 @@
     <h3>6.1 층 진행</h3>
     <p>적을 쓰러뜨리면 보상 화면 → 다음 층. 층 이동 시 컨디션 재굴림. 층수 무한 (최고 기록 localStorage 저장).</p>
 
-    <h3>6.2 보상 시스템</h3>
-    <p>층 클리어 후 선택: 장비 (무기/방어구) / 마법 추가 / 아이템 보충</p>
-
-    <h3>6.3 장비 풀 (6개)</h3>
+    <h3>6.2 보상 시스템 <span class="badge badge-new">v1.5.4 전면 개편</span></h3>
+    <p>층 클리어 후 4가지 선택지 중 하나를 고름:</p>
     <div class="table-wrap">
       <table>
-        <tr><th>장비</th><th>종류</th><th>효과</th></tr>
-        <tr><td>철제 검</td><td>무기 (range 2)</td><td>strength +10</td></tr>
-        <tr><td>신속의 장화</td><td>방어구</td><td>agility +12</td></tr>
-        <tr><td>화염 도검</td><td>무기 (range 2)</td><td>strength +8, fire +15</td></tr>
-        <tr><td>투척 단검</td><td>무기 (range 4)</td><td>strength +6, agility +4</td></tr>
-        <tr><td>철제 방패</td><td>방어구</td><td>armor +15</td></tr>
-        <tr><td>그림자 망토</td><td>방어구</td><td>agility +8, dark +10</td></tr>
+        <tr><th>선택지</th><th>내용</th></tr>
+        <tr><td><strong>장비</strong></td><td>층수 기반 티어 장비 1개 (무기 또는 방어구)</td></tr>
+        <tr><td><strong>아이템</strong></td><td>소모 아이템 1개 (폭발 물약 / 강화 단검 / 대형 치유 물약)</td></tr>
+        <tr><td><strong>칭호</strong></td><td>적 능력치 기반 칭호 3종 중 선택 → 즉시 능력치 반영</td></tr>
+        <tr><td><strong>건너뛰기</strong></td><td>아무것도 받지 않음</td></tr>
       </table>
     </div>
+
+    <section id="equipment">
+      <h3>6.3 장비 풀 (티어별) <span class="badge badge-new">v1.5.4 티어 분리</span></h3>
+
+      <div class="tier-block">
+        <div class="tier-header tier-t1"><span class="badge badge-tier">T1</span> 1~5층</div>
+        <div class="table-wrap">
+          <table>
+            <tr><th>장비</th><th>종류</th><th>효과</th></tr>
+            <tr><td>철제 검</td><td>무기 (range 2)</td><td>strength +10</td></tr>
+            <tr><td>신속의 장화</td><td>방어구</td><td>agility +12</td></tr>
+            <tr><td>화염 도검</td><td>무기 (range 2)</td><td>strength +8, fire +15</td></tr>
+            <tr><td>투척 단검</td><td>무기 (range 4)</td><td>strength +6, agility +4</td></tr>
+            <tr><td>철제 방패</td><td>방어구</td><td>armor +15</td></tr>
+            <tr><td>그림자 망토</td><td>방어구</td><td>agility +8, dark +10</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="tier-block">
+        <div class="tier-header tier-t2"><span class="badge badge-tier">T2</span> 6~12층</div>
+        <div class="table-wrap">
+          <table>
+            <tr><th>장비</th><th>종류</th><th>효과</th></tr>
+            <tr><td>강철 대검</td><td>무기 (range 2)</td><td>strength +18</td></tr>
+            <tr><td>경량 갑옷</td><td>방어구</td><td>agility +14, armor +6</td></tr>
+            <tr><td>빙결 도검</td><td>무기 (range 2)</td><td>strength +10, water +22</td></tr>
+            <tr><td>중갑 방패</td><td>방어구</td><td>armor +22</td></tr>
+            <tr><td>폭풍 망토</td><td>방어구</td><td>agility +12, wind +18</td></tr>
+            <tr><td>뇌전 도검</td><td>무기 (range 2)</td><td>strength +12, wind +12, dark +8</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="tier-block">
+        <div class="tier-header tier-t3"><span class="badge badge-tier">T3</span> 13층+</div>
+        <div class="table-wrap">
+          <table>
+            <tr><th>장비</th><th>종류</th><th>효과</th></tr>
+            <tr><td>전설의 검</td><td>무기 (range 3)</td><td>strength +28</td></tr>
+            <tr><td>마스터 갑주</td><td>방어구</td><td>armor +28, agility +10</td></tr>
+            <tr><td>비전 지팡이</td><td>무기 (range 5)</td><td>strength +6, 전속성 +18</td></tr>
+            <tr><td>홍염 대검</td><td>무기 (range 2)</td><td>strength +22, fire +20</td></tr>
+            <tr><td>허공의 갑주</td><td>방어구</td><td>armor +20, agility +14, dark +20</td></tr>
+          </table>
+        </div>
+      </div>
+    </section>
   </section>
 
   <!-- ============================================================ -->
   <section id="magic">
-    <h2>7. 마법 & 아이템</h2>
+    <h2>7. 마법 &amp; 아이템</h2>
 
     <h3>7.1 마법 시스템</h3>
     <div class="table-wrap">
@@ -670,14 +744,17 @@
         <tr><td>쿨다운</td><td>시전 후 1턴 대기</td><td>즉시 (쿨다운 없음)</td></tr>
       </table>
     </div>
-    <blockquote>'비전 연구자' 타이틀 장착 시 항상 쿨다운 0</blockquote>
+    <blockquote>'비전 연구자' 칭호 장착 시 항상 쿨다운 0</blockquote>
 
-    <h3>7.2 시작 아이템</h3>
+    <h3>7.2 아이템 전체 (5종) <span class="badge badge-new">v1.5.4 +3종</span></h3>
     <div class="table-wrap">
       <table>
-        <tr><th>아이템</th><th>효과</th></tr>
-        <tr><td>치유 물약</td><td>HP +25 (턴 소모)</td></tr>
-        <tr><td>단검 던지기</td><td>사거리 4 이내 적에게 데미지. 적이 이동 중이면 빗나감.</td></tr>
+        <tr><th>아이템</th><th>획득</th><th>효과</th></tr>
+        <tr><td>치유 물약</td><td>시작 지급</td><td>HP +25</td></tr>
+        <tr><td>단검 던지기</td><td>시작 지급</td><td>사거리 4, strength × 0.9 피해</td></tr>
+        <tr><td><span class="badge badge-new">NEW</span> 폭발 물약</td><td>보상</td><td>방어 무시 고정 피해 32, 사거리 5</td></tr>
+        <tr><td><span class="badge badge-new">NEW</span> 강화 단검</td><td>보상</td><td>사거리 4, strength × 1.2 피해</td></tr>
+        <tr><td><span class="badge badge-new">NEW</span> 대형 치유 물약</td><td>보상</td><td>HP +50</td></tr>
       </table>
     </div>
   </section>
@@ -725,7 +802,7 @@
         <tr><td>4</td><td>1.0×</td></tr>
         <tr><td>5</td><td style="color:var(--green)">1.35×</td></tr>
         <tr><td>6</td><td style="color:var(--green)">1.8×</td></tr>
-        <tr><td>sum 모드 (전체 합산 크리티컬)</td><td style="color:var(--green)">1.4× ~ 2.8×</td></tr>
+        <tr><td>sum 모드 (합산 크리티컬)</td><td style="color:var(--green)">1.4× ~ 2.8×</td></tr>
       </table>
     </div>
 
@@ -754,7 +831,6 @@
 <button id="top-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="맨 위로">↑</button>
 
 <script>
-  // Active nav highlight
   const sections = document.querySelectorAll('section[id]');
   const navLinks = document.querySelectorAll('#sidebar nav a');
 
@@ -770,7 +846,6 @@
 
   sections.forEach(s => observer.observe(s));
 
-  // Back to top
   const topBtn = document.getElementById('top-btn');
   window.addEventListener('scroll', () => {
     topBtn.classList.toggle('show', window.scrollY > 400);

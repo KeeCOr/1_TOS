@@ -3,6 +3,20 @@
 // ============================================================
 
 export type ActionType   = '공격' | '이동' | '방어' | '마법 사용' | '아이템 사용';
+
+// 행동별 사거리 (그리드 하이라이트 + UI 표시용)
+export const MAGIC_RANGE      = 5; // 마법은 최대 사거리까지 사용 가능 (거리 보너스는 distanceBonus에 정의)
+export const ITEM_THROW_RANGE = 4; // 투척 아이템 기본 사거리
+export const MOVE_RANGE       = 1; // 이동은 1칸씩
+// 공격 사거리는 Character.weaponRange (무기에 따라 다름)
+// 방어는 사거리 무관
+
+export function getActionRange(action: ActionType, weaponRange: number): number {
+  if (action === '공격') return weaponRange;
+  if (action === '마법 사용') return MAGIC_RANGE;
+  if (action === '아이템 사용') return ITEM_THROW_RANGE;
+  return 0; // 이동/방어는 사거리 개념 없음
+}
 export type GamePhase    = 'start' | 'tutorial' | 'naming' | 'stat_roll' | 'battle' | 'reward' | 'gameover';
 export type TitleId      = 'weapon_breaker' | 'tower_climber' | 'boss_slayer' | 'magic_adept' | 'survivor' | 'novice' | `combat_${string}`;
 export type MatchQuality = 'perfect' | 'partial' | 'miss';
@@ -571,11 +585,11 @@ export function getMagicCooldownByProgress(floor: number, player: Character): nu
   return 1;
 }
 
-export function getMagicCostByProgress(floor: number, player: Character): number {
+export function getMagicCostByProgress(floor: number, _player?: Character): number {
   return floor >= 10 ? 8 : 10;
 }
 
-export function getMagicRegenByProgress(floor: number, player: Character): number {
+export function getMagicRegenByProgress(floor: number, _player?: Character): number {
   return floor >= 10 ? 10 : 8;
 }
 
@@ -669,6 +683,14 @@ export function resolveTurn(
   if (quality === 'miss')    pDice = Math.max(1, pDice - 1);
   if ((playerMain === '방어' || playerMain === '이동') && agiRatio >= 1.4)
     pDice = Math.min(5, pDice + 1);
+
+  // Stamina penalty: low stamina directly reduces dice on top of stat reduction
+  const pStamPct = player.stamina / Math.max(1, player.maxStamina);
+  const eStamPct = enemy.stamina  / Math.max(1, enemy.maxStamina);
+  if (pStamPct < 0.15) pDice = Math.max(1, pDice - 2);
+  else if (pStamPct < 0.30) pDice = Math.max(1, pDice - 1);
+  if (eStamPct < 0.15) eDice = Math.max(1, eDice - 2);
+  else if (eStamPct < 0.30) eDice = Math.max(1, eDice - 1);
 
   const playerDice = rollWithAdvantage(pDice);
   const enemyDice  = rollWithAdvantage(eDice);

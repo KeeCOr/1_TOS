@@ -18,7 +18,24 @@
   80%  { opacity: 1; transform: translateY(-40px); }
   100% { opacity: 0; transform: translateY(-56px); }
 }
-
 .animate-bounce-up {
   animation: bounce-up 1.8s ease-out forwards;
+}
+
+@keyframes slide-up-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up {
+  animation: slide-up-in 0.18s ease-out forwards;
+}
+
+@keyframes card-hit {
+  0%   { transform: scale(1); }
+  25%  { transform: scale(1.06) rotate(-1deg); }
+  50%  { transform: scale(0.97) rotate(1deg); }
+  100% { transform: scale(1); }
+}
+.animate-card-hit {
+  animation: card-hit 0.3s ease-out;
 }

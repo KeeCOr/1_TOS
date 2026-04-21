@@ -5,9 +5,10 @@ const fs   = require('fs');
 function createWindow() {
   const win = new BrowserWindow({
     width: 1280,
-    height: 860,
-    minWidth: 800,
-    minHeight: 600,
+    height: 720,
+    minWidth: 1280,
+    minHeight: 720,
+    resizable: false,
     title: 'T of Sword',
     backgroundColor: '#030712',
     webPreferences: {

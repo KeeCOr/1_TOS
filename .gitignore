@@ -43,3 +43,5 @@ next-env.d.ts
 # electron build output
 /release/
 /dist/
+release_TOS/
+.claude/

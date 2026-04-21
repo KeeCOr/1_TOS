@@ -13,6 +13,7 @@ import {
   getMagicCostByProgress, getMagicCooldownByProgress, getMagicRegenByProgress,
   COMBAT_ROW_DEFAULT, COMBAT_ROW_MIN, COMBAT_ROW_MAX,
   CONDITION_LABELS, CONDITION_COLORS, rollCondition,
+  getActionRange,
 } from '@/lib/gameData';
 
 // ── 저장 슬롯 (3개) ───────────────────────────────────────────
@@ -122,33 +123,37 @@ function addFloorGhost(targetFloor: number, player: Character) {
 // Utility
 // ════════════════════════════════════════════════════════════
 
-function HpBar({ cur, max, color }: { cur: number; max: number; color: 'red' | 'blue' }) {
-  const pct = Math.max(0, Math.min(100, (cur / max) * 100));
-  return (
-    <div className="w-full h-3 bg-gray-900 rounded-full overflow-hidden border border-gray-700">
-      <div className={`h-full rounded-full transition-all duration-500 ${
-        color === 'red' ? 'bg-gradient-to-r from-red-900 to-red-500' : 'bg-gradient-to-r from-blue-900 to-blue-400'
-      }`} style={{ width: `${pct}%` }} />
-    </div>
+// 캐릭터 이미지 경로 규칙:
+//   플레이어  → /chars/player.png
+//   적(일반)  → /chars/{enemy.id}.png   (예: /chars/goblin.png)
+//   보스      → /chars/{enemy.id}.png   (예: /chars/samurai_boss.png)
+//   유령      → /chars/ghost.png
+//   이미지 없으면 자동으로 이모지 폴백
+function CharImage({
+  src, fallback, size, glow, flash, removeWhiteBg,
+}: {
+  src: string; fallback: string; size: number;
+  glow?: string; flash?: boolean; removeWhiteBg?: boolean;
+}) {
+  const [err, setErr] = useState(false);
+  useEffect(() => { setErr(false); }, [src]);
+  if (err) return (
+    <span className="leading-none select-none" style={{ fontSize: size * 0.72 }}>{fallback}</span>
   );
-}
-
-function StaminaBar({ cur, max, label = true }: { cur: number; max: number; label?: boolean }) {
-  const pct = max > 0 ? Math.max(0, Math.min(100, (cur / max) * 100)) : 0;
-  const barColor = pct > 55
-    ? 'bg-gradient-to-r from-yellow-700 to-yellow-400'
-    : pct > 25
-    ? 'bg-gradient-to-r from-orange-700 to-orange-500'
-    : 'bg-gradient-to-r from-red-800 to-red-500';
   return (
-    <div className="flex items-center gap-1.5">
-      {label && <span className="text-[9px] text-yellow-600 shrink-0">⚡</span>}
-      <div className="flex-1 h-2 bg-gray-900 rounded-full overflow-hidden border border-gray-800">
-        <div className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-          style={{ width: `${pct}%` }} />
-      </div>
-      {label && <span className="text-[9px] text-yellow-700 shrink-0 tabular-nums">{cur}</span>}
-    </div>
+    <img
+      src={src} alt="" onError={() => setErr(true)}
+      width={size} height={size}
+      className="object-contain select-none"
+      style={{
+        width: size, height: size,
+        mixBlendMode: removeWhiteBg ? 'multiply' : undefined,
+        filter: flash
+          ? `drop-shadow(0 0 14px ${glow ?? 'rgba(255,255,255,0.8)'})`
+          : glow ? `drop-shadow(0 0 8px ${glow})` : undefined,
+        imageRendering: 'crisp-edges',
+      }}
+    />
   );
 }
 
@@ -208,163 +213,243 @@ function BattleGrid({
     enemyStats.elements.earth, enemyStats.elements.dark,
   ];
 
+  const pFlash = hitFlash === 'player' || hitFlash === 'both';
+  const eFlash = hitFlash === 'enemy'  || hitFlash === 'both';
+  const rowSame = playerRow === enemyRow;
+  const rowLabel = (r: number) => r === 1 ? '상' : r === 2 ? '중' : '하';
+
   return (
-    <div className="px-3 pt-3 pb-2 bg-gray-950 border-b border-gray-800">
+    <div className="relative overflow-hidden border-b border-gray-800/60"
+      style={{ background: 'linear-gradient(180deg,#09070f 0%,#0e0a08 65%,#07080e 100%)' }}>
 
-      {/* ── 상단 상태 행: 플레이어 | 거리 | 적 + 능력치 ── */}
-      <div className="flex items-start gap-2 mb-3">
-
-        {/* 플레이어 */}
-        <div className="flex-1 space-y-1 min-w-0">
-          <div className="flex items-center gap-1 mb-0.5">
-            <span className="text-[9px] text-blue-300 font-bold truncate">나 ({player.name})</span>
-            <span className="text-[9px] text-gray-400 ml-auto tabular-nums">{player.hp}/{player.maxHp}</span>
-          </div>
-          <HpBar cur={player.hp} max={player.maxHp} color="red" />
-          <HpBar cur={player.mp} max={player.maxMp} color="blue" />
-          <StaminaBar cur={player.stamina} max={player.maxStamina} />
-          <div className="flex items-center gap-1 pt-0.5">
-            {player.condition && (
-              <span className={`text-[9px] font-bold px-1 rounded bg-gray-800/60 ${CONDITION_COLORS[player.condition]}`}>
-                {CONDITION_LABELS[player.condition]}
-              </span>
-            )}
-            <span className="text-[9px] text-gray-500 ml-auto tabular-nums">💪{getEffectiveStats(player).strength} 👣{getEffectiveStats(player).agility}</span>
-          </div>
-        </div>
-
-        {/* 중앙: 거리 */}
-        <div className="flex flex-col items-center shrink-0 gap-1 min-w-[60px]">
-          <span className={`text-xs font-bold ${distCol}`}>{label}</span>
-          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${inRange ? 'bg-green-900/60 text-green-400' : 'bg-red-900/60 text-red-400'}`}>
-            {inRange ? '✓ 사정거리' : '⚠ 초과'}
-          </span>
-          {pBonus !== null && pBonus !== 1.0 && (
-            <span className={`text-[9px] font-bold px-1 rounded ${pBonus > 1 ? 'text-green-400 bg-green-900/40' : 'text-red-400 bg-red-900/40'}`}>
-              {pBonus > 1 ? `+${Math.round((pBonus-1)*100)}%` : `${Math.round((pBonus-1)*100)}%`}
-            </span>
-          )}
-        </div>
-
-        {/* 적 상태 + 능력치 */}
-        <div className="flex-1 space-y-1 min-w-0">
-          <div className="flex items-center gap-1 mb-0.5">
-            <span className="text-[9px] text-red-300 truncate font-bold">{enemy.name}</span>
-            <span className="text-[9px] text-red-400 ml-auto tabular-nums">{enemy.hp}/{enemy.maxHp}</span>
-          </div>
-          <HpBar cur={enemy.hp} max={enemy.maxHp} color="red" />
-          <HpBar cur={enemy.mp} max={enemy.maxMp} color="blue" />
-          <StaminaBar cur={enemy.stamina} max={enemy.maxStamina} />
-          {/* 스탯 비교 */}
-          <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] pt-0.5">
-            <span className={enemyStats.strength > playerStats.strength ? 'text-red-400' : 'text-green-400'}>
-              💪 {enemyStats.strength}<span className="text-gray-600"> / {playerStats.strength}</span>
-            </span>
-            <span className={enemyStats.agility > playerStats.agility ? 'text-red-400' : 'text-green-400'}>
-              👣 {enemyStats.agility}<span className="text-gray-600"> / {playerStats.agility}</span>
-            </span>
-            <span className="text-gray-500">🛡️{enemyStats.armor}%</span>
-            {enemy.condition && (
-              <span className={`font-bold px-0.5 rounded bg-gray-800/60 ${CONDITION_COLORS[enemy.condition]}`}>
-                {CONDITION_LABELS[enemy.condition]}
-              </span>
-            )}
-          </div>
-          {/* 속성 */}
-          <div className="flex gap-0.5">
-            {elVals.map((v, i) => v > 0 ? (
-              <span key={i} className={`${elColors[i]} rounded px-1 text-[8px] text-white font-bold`}>{v}</span>
-            ) : null)}
-          </div>
-          {/* 특수 능력 */}
-          {enemy.abilities && enemy.abilities.length > 0 && (
-            <div className="text-[8px] text-yellow-600 leading-tight">
-              {enemy.abilities.map(a => `• ${a.name}`).join(' ')}
-            </div>
-          )}
-        </div>
+      {/* 배경 캐릭터 광원 */}
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute left-0 top-0 w-2/5 h-full"
+          style={{ background: 'radial-gradient(ellipse at 10% 40%, rgba(59,130,246,0.12) 0%, transparent 70%)' }} />
+        <div className="absolute right-0 top-0 w-2/5 h-full"
+          style={{ background: 'radial-gradient(ellipse at 90% 40%, rgba(239,68,68,0.12) 0%, transparent 70%)' }} />
       </div>
 
-      {/* ── 행 상태 배지 ── */}
-      <div className={`text-center text-[10px] font-bold mb-1 py-0.5 rounded transition-all duration-300 ${
-        playerRow === enemyRow
-          ? 'text-yellow-300 bg-yellow-900/30 border border-yellow-700/50'
-          : 'text-green-300 bg-green-900/30 border border-green-700/50'
-      }`}>
-        {playerRow === enemyRow
-          ? '⚔ 같은 행 — 정면 대치'
-          : '↕ 다른 행 — 위치 분리'}
-      </div>
+      <div className="relative px-3 pt-3 pb-2">
 
-      {/* ── 3×5 그리드 (행 1-3) ── */}
-      <div className="relative flex flex-col gap-1">
-        {[1, 2, 3].map(rowIdx => {
-          const rowLabel = rowIdx === 1 ? '상' : rowIdx === 2 ? '중' : '하';
-          const isPlayerRow = rowIdx === playerRow;
-          const isEnemyRow  = rowIdx === enemyRow;
-          const rowMismatch = playerRow !== enemyRow;
-          return (
-            <div key={rowIdx} className={`flex gap-1 items-center rounded transition-all duration-300 ${
-              isPlayerRow && isEnemyRow ? 'bg-purple-900/10'
-              : isPlayerRow ? 'bg-blue-900/10'
-              : isEnemyRow  ? 'bg-red-900/10'
-              : ''
-            }`}>
-              {/* 행 라벨 */}
-              <div className="w-6 shrink-0 text-[9px] font-bold text-center leading-none py-1">
-                {isPlayerRow && isEnemyRow
-                  ? <span className="text-purple-400">⚡</span>
-                  : isPlayerRow
-                  ? <span className="text-blue-400 flex flex-col items-center gap-0"><span>🛡</span><span className="text-[7px]">{rowLabel}</span></span>
-                  : isEnemyRow
-                  ? <span className="text-red-400 flex flex-col items-center gap-0"><span>⚔</span><span className="text-[7px]">{rowLabel}</span></span>
-                  : <span className="text-gray-700">{rowLabel}</span>}
+        {/* ── 캐릭터 카드 행 ── */}
+        <div className="flex items-stretch gap-2 mb-2">
+
+          {/* 플레이어 카드 */}
+          <div className={`flex-1 rounded-2xl p-2.5 border transition-all duration-200 ${
+            pFlash
+              ? 'border-red-400 animate-card-hit'
+              : 'border-blue-800/50'
+          }`}
+            style={{ background: pFlash
+              ? 'linear-gradient(135deg,#2d0a0a,#1a0505)'
+              : 'linear-gradient(135deg,#0a1628 0%,#050d1a 100%)' }}>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="shrink-0 w-9 h-9 flex items-center justify-center">
+                <CharImage src="/chars/player.png" fallback="🛡️" size={36}
+                  glow={pFlash ? 'rgba(239,68,68,0.9)' : 'rgba(96,165,250,0.65)'} flash={pFlash} />
               </div>
-              {[1, 2, 3, 4, 5].map(pos => {
-                const isPlayer = isPlayerRow && pos === playerPos;
-                const isEnemy  = isEnemyRow  && pos === enemyPos;
-                const isInRange = isEnemyRow && !isPlayer && !isEnemy
-                                  && pos > playerPos && pos <= playerPos + playerWeaponRange
-                                  && !rowMismatch;
-                return (
-                  <div key={pos}
-                    className={`
-                      flex-1 flex items-center justify-center rounded-lg border
-                      transition-all duration-300 select-none
-                      h-12
-                      ${isPlayer   ? `bg-blue-900/70 border-blue-400 shadow-[0_0_16px_rgba(59,130,246,0.55)] ${(hitFlash==='player'||hitFlash==='both') ? 'animate-pulse bg-red-900/80 border-red-300' : ''}`
-                      : isEnemy    ? `bg-red-900/70  border-red-400  shadow-[0_0_16px_rgba(239,68,68,0.55)]  ${(hitFlash==='enemy'||hitFlash==='both')  ? 'animate-pulse bg-yellow-900/80 border-yellow-300' : ''}`
-                      : isInRange  ? 'bg-green-950/50 border-green-700/60'
-                      : isPlayerRow? 'bg-blue-900/20  border-blue-900/40'
-                      : isEnemyRow ? 'bg-red-900/20   border-red-900/40'
-                      :              'bg-gray-900/20  border-gray-800/25'}
-                    `}>
-                    {isPlayer ? (
-                      <span className="text-2xl drop-shadow-lg leading-none">🛡️</span>
-                    ) : isEnemy ? (
-                      <span className="text-2xl drop-shadow-lg leading-none">{enemy.isLegacy ? '👻' : '⚔️'}</span>
-                    ) : isPlayerRow || isEnemyRow ? (
-                      <span className="text-[9px] font-bold text-gray-600">{pos}</span>
-                    ) : (
-                      <span className="text-[7px] text-gray-800">·</span>
-                    )}
-                  </div>
-                );
-              })}
+              <div className="min-w-0">
+                <div className="text-[10px] font-bold text-blue-300 truncate">{player.name}</div>
+                <div className="text-[8px] text-gray-600">Lv.{player.level}</div>
+              </div>
             </div>
-          );
-        })}
+            {/* HP */}
+            <div className="mb-1.5">
+              <div className="flex justify-between text-[8px] mb-0.5">
+                <span className="text-red-400 font-bold">HP</span>
+                <span className="text-gray-500 tabular-nums">{player.hp}<span className="text-gray-700">/{player.maxHp}</span></span>
+              </div>
+              <div className="h-2.5 bg-black/50 rounded-full overflow-hidden border border-gray-700/40">
+                <div className={`h-full rounded-full transition-all duration-700 ${
+                  player.hp/player.maxHp > 0.5 ? 'bg-gradient-to-r from-green-700 to-green-500'
+                  : player.hp/player.maxHp > 0.25 ? 'bg-gradient-to-r from-yellow-700 to-yellow-500'
+                  : 'bg-gradient-to-r from-red-800 to-red-500'
+                }`} style={{ width:`${Math.max(0,(player.hp/player.maxHp)*100)}%` }} />
+              </div>
+            </div>
+            {/* MP */}
+            <div className="h-1.5 bg-black/50 rounded-full overflow-hidden border border-gray-700/30 mb-1">
+              <div className="h-full bg-gradient-to-r from-blue-800 to-blue-500 rounded-full transition-all duration-700"
+                style={{ width:`${Math.max(0,(player.mp/player.maxMp)*100)}%` }} />
+            </div>
+            {/* 스테미너 */}
+            <div className={`h-1.5 bg-black/50 rounded-full overflow-hidden border border-gray-700/30 mb-1.5 ${
+              player.stamina/player.maxStamina < 0.3 ? 'ring-1 ring-red-700/50' : ''
+            }`}>
+              <div className={`h-full rounded-full transition-all duration-700 ${
+                player.stamina/player.maxStamina > 0.55 ? 'bg-gradient-to-r from-yellow-700 to-yellow-400'
+                : player.stamina/player.maxStamina > 0.25 ? 'bg-gradient-to-r from-orange-700 to-orange-500'
+                : 'bg-gradient-to-r from-red-800 to-red-600'
+              }`} style={{ width:`${Math.max(0,(player.stamina/player.maxStamina)*100)}%` }} />
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              <span className="text-[9px] text-gray-400">💪<b className="text-gray-200">{playerStats.strength}</b></span>
+              <span className="text-[9px] text-gray-400">👣<b className="text-gray-200">{playerStats.agility}</b></span>
+              {player.stamina/player.maxStamina < 0.3 && (
+                <span className="text-[8px] text-red-500 font-bold">⚡부족!</span>
+              )}
+              {player.condition && (
+                <span className={`text-[8px] font-bold px-1 rounded-full ${CONDITION_COLORS[player.condition]}`}
+                  style={{ background:'rgba(0,0,0,0.45)' }}>
+                  {CONDITION_LABELS[player.condition]}
+                </span>
+              )}
+            </div>
+          </div>
 
-        {/* 플로팅 데미지 */}
-        <FloatingLayer texts={floatingTexts} side="player" />
-        <FloatingLayer texts={floatingTexts} side="enemy" />
-      </div>
+          {/* 중앙 정보 */}
+          <div className="flex flex-col items-center justify-center gap-1.5 shrink-0 min-w-[58px]">
+            <span className={`text-sm font-black ${distCol}`}
+              style={{ textShadow:`0 0 10px ${distance<=2?'rgba(239,68,68,0.5)':'rgba(156,163,175,0.2)'}` }}>
+              {label}
+            </span>
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${
+              inRange ? 'bg-green-900/40 text-green-400 border-green-700/50'
+                      : 'bg-red-900/40 text-red-400 border-red-700/50'
+            }`}>{inRange ? '✓ 범위' : '× 초과'}</span>
+            {pBonus !== null && pBonus !== 1.0 && (
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${pBonus>1?'text-green-400':'text-orange-400'}`}
+                style={{ background:'rgba(0,0,0,0.5)' }}>
+                {pBonus>1?`+${Math.round((pBonus-1)*100)}%`:`${Math.round((pBonus-1)*100)}%`}
+              </span>
+            )}
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full border ${
+              rowSame ? 'bg-yellow-900/40 text-yellow-300 border-yellow-700/40'
+                      : 'bg-gray-800/60 text-gray-500 border-gray-700/30'
+            }`}>{rowSame ? '⚔ 같은행' : '↕ 분리'}</span>
+          </div>
 
-      {/* 위치 화살표 */}
-      <div className="flex items-center justify-center gap-1 mt-1.5 text-[9px] text-gray-600">
-        <span className="text-blue-700">🛡️ {playerPos}</span>
-        <span className="flex-1 text-center tracking-widest">{'─'.repeat(Math.max(0, distance))}▶ 거리 {distance}</span>
-        <span className="text-red-700">{enemyPos} ⚔️</span>
+          {/* 적 카드 */}
+          <div className={`flex-1 rounded-2xl p-2.5 border transition-all duration-200 ${
+            eFlash ? 'border-yellow-400 animate-card-hit' : 'border-red-800/50'
+          }`}
+            style={{ background: eFlash
+              ? 'linear-gradient(135deg,#2d2000,#1a1000)'
+              : 'linear-gradient(135deg,#1a0808 0%,#0f0404 100%)' }}>
+            <div className="flex items-center gap-2 mb-2 flex-row-reverse">
+              <div className="shrink-0 w-9 h-9 flex items-center justify-center">
+                <CharImage
+                  src={enemy.isLegacy ? '/chars/ghost.png' : `/chars/${enemy.id ?? 'enemy'}.png`}
+                  fallback={enemy.isLegacy ? '👻' : enemy.isBoss ? '💀' : '⚔️'}
+                  size={36}
+                  glow={eFlash ? 'rgba(234,179,8,0.9)' : 'rgba(239,68,68,0.65)'} flash={eFlash} />
+              </div>
+              <div className="min-w-0 text-right">
+                <div className="text-[10px] font-bold text-red-300 truncate">{enemy.name}</div>
+                <div className="text-[8px] text-gray-600">{enemy.isBoss ? '⚠ 보스' : '적군'}</div>
+              </div>
+            </div>
+            {/* HP */}
+            <div className="mb-1.5">
+              <div className="flex justify-between text-[8px] mb-0.5">
+                <span className="text-red-400 font-bold">HP</span>
+                <span className="text-gray-500 tabular-nums">{enemy.hp}<span className="text-gray-700">/{enemy.maxHp}</span></span>
+              </div>
+              <div className="h-2.5 bg-black/50 rounded-full overflow-hidden border border-gray-700/40">
+                <div className={`h-full rounded-full transition-all duration-700 ${
+                  enemy.hp/enemy.maxHp > 0.5 ? 'bg-gradient-to-r from-red-800 to-red-500'
+                  : enemy.hp/enemy.maxHp > 0.25 ? 'bg-gradient-to-r from-orange-800 to-orange-500'
+                  : 'bg-gradient-to-r from-red-950 to-red-700'
+                }`} style={{ width:`${Math.max(0,(enemy.hp/enemy.maxHp)*100)}%` }} />
+              </div>
+            </div>
+            {/* MP */}
+            <div className="h-1.5 bg-black/50 rounded-full overflow-hidden border border-gray-700/30 mb-1">
+              <div className="h-full bg-gradient-to-r from-purple-800 to-purple-600 rounded-full transition-all duration-700"
+                style={{ width:`${Math.max(0,(enemy.mp/enemy.maxMp)*100)}%` }} />
+            </div>
+            {/* 스테미너 */}
+            <div className="h-1.5 bg-black/50 rounded-full overflow-hidden border border-gray-700/30 mb-1.5">
+              <div className="h-full bg-gradient-to-r from-orange-900 to-orange-700 rounded-full transition-all duration-700"
+                style={{ width:`${Math.max(0,(enemy.stamina/enemy.maxStamina)*100)}%` }} />
+            </div>
+            <div className="flex gap-1.5 flex-wrap justify-end">
+              <span className={`text-[9px] ${enemyStats.strength>playerStats.strength?'text-red-400':'text-green-400'}`}>
+                💪<b>{enemyStats.strength}</b>
+              </span>
+              <span className={`text-[9px] ${enemyStats.agility>playerStats.agility?'text-red-400':'text-green-400'}`}>
+                👣<b>{enemyStats.agility}</b>
+              </span>
+              {elVals.map((v,i)=>v>0?<span key={i} className={`${elColors[i]} rounded-full px-1 text-[7px] text-white font-bold`}>{v}</span>:null)}
+              {enemy.condition && (
+                <span className={`text-[8px] font-bold px-1 rounded-full ${CONDITION_COLORS[enemy.condition]}`}
+                  style={{ background:'rgba(0,0,0,0.45)' }}>
+                  {CONDITION_LABELS[enemy.condition]}
+                </span>
+              )}
+            </div>
+            {enemy.abilities && enemy.abilities.length > 0 && (
+              <div className="text-[7px] text-orange-600/70 mt-0.5 text-right truncate">
+                {enemy.abilities.map(a=>`• ${a.name}`).join(' ')}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── 행 상태 배너 ── */}
+        <div className={`text-center text-[10px] font-bold py-1 rounded-xl mb-2 border transition-all duration-300 ${
+          rowSame
+            ? 'bg-yellow-950/40 border-yellow-800/40 text-yellow-300'
+            : 'bg-gray-900/40 border-gray-700/30 text-gray-500'
+        }`}>
+          {rowSame
+            ? `⚔ ${rowLabel(playerRow)}열 정면 대치 — 물리 공격 명중`
+            : `↕ 내 ${rowLabel(playerRow)}열 / 적 ${rowLabel(enemyRow)}열 — 물리 공격 불가`}
+        </div>
+
+        {/* ── 3×5 전술 그리드 ── */}
+        <div className="relative flex flex-col gap-0.5">
+          {[1,2,3].map(rowIdx => {
+            const rl = rowLabel(rowIdx);
+            const isPlayerRow = rowIdx === playerRow;
+            const isEnemyRow  = rowIdx === enemyRow;
+            const rowMismatch = !rowSame;
+            return (
+              <div key={rowIdx} className="flex gap-0.5 items-center">
+                <div className={`w-5 text-center text-[8px] font-bold shrink-0 ${
+                  isPlayerRow && isEnemyRow ? 'text-yellow-400'
+                  : isPlayerRow ? 'text-blue-400'
+                  : isEnemyRow  ? 'text-red-400'
+                  : 'text-gray-700'
+                }`}>{rl}</div>
+                {[1,2,3,4,5].map(pos => {
+                  const isPlayer = isPlayerRow && pos === playerPos;
+                  const isEnemy  = isEnemyRow  && pos === enemyPos;
+                  const isInRange = isEnemyRow && !isPlayer && !isEnemy
+                                    && pos > playerPos && pos <= playerPos + playerWeaponRange
+                                    && !rowMismatch;
+                  return (
+                    <div key={pos} className={`
+                      flex-1 flex items-center justify-center rounded-lg border
+                      transition-all duration-300 select-none h-10
+                      ${isPlayer
+                        ? `border-blue-400/80 shadow-[0_0_12px_rgba(59,130,246,0.45)] ${pFlash?'bg-red-900/70 border-red-400/80 animate-pulse':'bg-blue-900/65'}`
+                        : isEnemy
+                        ? `border-red-400/80 shadow-[0_0_12px_rgba(239,68,68,0.45)] ${eFlash?'bg-yellow-900/70 border-yellow-400/80 animate-pulse':'bg-red-900/65'}`
+                        : isInRange
+                        ? 'bg-green-950/35 border-green-700/35'
+                        : isPlayerRow ? 'bg-blue-950/20 border-blue-900/25'
+                        : isEnemyRow  ? 'bg-red-950/20  border-red-900/25'
+                        : 'bg-white/[0.02] border-white/[0.04]'
+                      }`}>
+                      {isPlayer
+                        ? <CharImage src="/chars/player.png" fallback="🛡️" size={28} glow={pFlash?'rgba(239,68,68,0.9)':'rgba(96,165,250,0.7)'} flash={pFlash} />
+                        : isEnemy
+                        ? <CharImage src={enemy.isLegacy?'/chars/ghost.png':`/chars/${(enemy as Character & {id?:string}).id??'enemy'}.png`} fallback={enemy.isLegacy?'👻':enemy.isBoss?'💀':'⚔️'} size={28} glow={eFlash?'rgba(234,179,8,0.9)':'rgba(239,68,68,0.7)'} flash={eFlash} />
+                        : (isPlayerRow||isEnemyRow) ? <span className="text-[8px] text-gray-700 font-bold">{pos}</span>
+                        : <span className="text-[6px] text-gray-800">·</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+
+          {/* 플로팅 데미지 */}
+          <FloatingLayer texts={floatingTexts} side="player" />
+          <FloatingLayer texts={floatingTexts} side="enemy" />
+        </div>
       </div>
     </div>
   );
@@ -596,8 +681,10 @@ function SubActionPanel({ playerMain, intent, onSelect, playerMagicSlots, player
     return false;
   };
 
-  // 비활성화된 옵션 제외
-  const myOptions = allOptions.filter(sub => !isPlayerDisabled(sub));
+  // 이동 옵션은 비활성화해도 표시 (이유 안내), 나머지는 필터
+  const myOptions = playerMain === '이동'
+    ? allOptions  // 이동은 모두 표시, 버튼 내부에서 disabled 처리
+    : allOptions.filter(sub => !isPlayerDisabled(sub));
 
   // 불가능한 적 서브 제외 후 확률 재정규화
   const allEnemySubs = (SUB_ACTIONS[intent.mainAction] as SubAction[]).filter(s => !isEnemySubImpossible(s));
@@ -609,38 +696,60 @@ function SubActionPanel({ playerMain, intent, onSelect, playerMagicSlots, player
   const likelyHint = SUB_ACTION_INFO[likelyEnemySub]?.hint ?? '';
 
   return (
-    <div className="space-y-2">
-      <div className="text-xs text-gray-400 px-1">
-        <span className="text-white font-semibold">{ACTION_ICONS[playerMain]} {playerMain}</span>의 세부 기술 선택
+    <div className="space-y-2.5">
+      <div className="flex items-center gap-2 px-1">
+        <span className="text-base leading-none">{ACTION_ICONS[playerMain]}</span>
+        <span className="text-sm font-black text-white">{playerMain}</span>
+        <span className="text-[10px] text-gray-600 font-medium">— 세부 기술 선택</span>
       </div>
-      <div className="bg-gray-950 border border-gray-800 rounded p-2 text-[11px]">
-        <div className="text-gray-500 mb-1 text-[10px]">적의 다음 행동</div>
-        <p className="text-orange-300 leading-snug">
-          {likelyHint}... 이런 행동을 할 것 같습니다.
-        </p>
+
+      {/* 적 행동 힌트 */}
+      <div className="flex items-start gap-2.5 rounded-xl px-3 py-2 border border-orange-900/40"
+        style={{ background: 'linear-gradient(135deg,#1f0e06,#120804)' }}>
+        <span className="text-xl leading-none shrink-0 mt-0.5">🔍</span>
+        <div>
+          <div className="text-[10px] text-orange-700 font-bold mb-0.5 uppercase tracking-wide">적 행동 예측</div>
+          <p className="text-[11px] text-orange-300 leading-snug">{likelyHint}... 이런 행동을 할 것 같습니다.</p>
+        </div>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+
+      <div className="grid grid-cols-3 gap-1.5">
         {myOptions.map(sub => {
           const info = SUB_ACTION_INFO[sub];
           const isPerfect = sub === perfectVsLikely;
           const dirIcon = MOVE_DIR_ICON[sub];
+          const disabled = isPlayerDisabled(sub);
+          const disabledReason =
+            sub === '전진 압박' ? '이미 인접' :
+            sub === '후퇴' ? '벽 막힘' :
+            sub === '위로 이동' ? '최상행' :
+            sub === '아래로 이동' ? '최하행' : '';
+          const dirColor = dirIcon === '▶' ? '#4ade80' : dirIcon === '◀' ? '#fb923c' : '#60a5fa';
           return (
-            <button key={sub} onClick={() => onSelect(sub)}
-              className={`relative flex flex-col items-center py-2 px-1 rounded-lg border text-center
-                transition-all active:scale-95 cursor-pointer text-xs font-semibold
-                ${isPerfect
-                  ? 'bg-yellow-900/40 border-yellow-600 text-yellow-300 hover:bg-yellow-900/60'
-                  : 'bg-gray-800 border-gray-600 text-gray-300 hover:bg-gray-700'}`}>
-              {isPerfect && (
-                <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 text-[9px] bg-yellow-600 text-black px-1 rounded font-bold">권장</span>
+            <button key={sub}
+              onClick={() => !disabled && onSelect(sub)}
+              disabled={disabled}
+              style={!disabled ? {
+                background: isPerfect
+                  ? 'linear-gradient(135deg,#2d2206,#1a1504)'
+                  : 'linear-gradient(135deg,#141420,#0c0c18)',
+                borderColor: isPerfect ? '#a16207' : '#2d2d40',
+              } : { background: 'linear-gradient(135deg,#0e0e14,#090910)', borderColor: '#1a1a24' }}
+              className={`relative flex flex-col items-center pt-4 pb-2 px-1.5 rounded-xl border-2 text-center transition-all
+                ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer active:scale-[0.94]'}`}>
+              {!disabled && isPerfect && (
+                <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] bg-yellow-500 text-black px-1.5 py-0.5 rounded-full font-black tracking-wide">권장</span>
               )}
-              {dirIcon && (
-                <span className={`text-lg leading-none mt-0.5 ${
-                  dirIcon === '▶' ? 'text-green-400' : dirIcon === '◀' ? 'text-orange-400' : 'text-blue-400'
-                }`}>{dirIcon}</span>
+              {disabled && disabledReason && (
+                <span className="absolute top-1 left-1/2 -translate-x-1/2 text-[8px] bg-gray-800 text-gray-600 px-1.5 py-0.5 rounded-full">{disabledReason}</span>
               )}
-              <span className={`mt-0.5 ${dirIcon ? 'text-[11px]' : 'text-sm mt-1'}`}>{sub}</span>
-              <span className="text-[10px] text-gray-500 mt-0.5">{info.desc}</span>
+              {dirIcon ? (
+                <span className="text-xl leading-none mb-1" style={{ color: disabled ? '#374151' : dirColor }}>{dirIcon}</span>
+              ) : (
+                <span className="text-lg leading-none mb-1">{ACTION_ICONS[playerMain as ActionType] ?? '⚡'}</span>
+              )}
+              <div className={`text-[11px] font-black leading-tight mb-0.5 ${disabled ? 'text-gray-600' : isPerfect ? 'text-yellow-300' : 'text-gray-200'}`}>{sub}</div>
+              <div className={`text-[9px] leading-tight ${disabled ? 'text-gray-700' : 'text-gray-600'}`}>{info.desc}</div>
             </button>
           );
         })}
@@ -1079,10 +1188,11 @@ function TutorialScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-function StartScreen({ highScore, onSelectSlot, onNewGame }: {
+function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial }: {
   highScore: number;
   onSelectSlot: (slotIndex: number) => void;
   onNewGame: (slotIndex: number) => void;
+  onTutorial: () => void;
 }) {
   const [metas, setMetas] = useState<ReturnType<typeof getAllSlotMetas>>([null, null, null]);
   const [confirm, setConfirm] = useState<{ slot: number; mode: 'delete' | 'new' } | null>(null);
@@ -1219,17 +1329,35 @@ function StartScreen({ highScore, onSelectSlot, onNewGame }: {
         })}
       </div>
 
+      {/* 튜토리얼 버튼 */}
+      <div className="mt-6 px-5 w-full max-w-xs">
+        <button onClick={onTutorial}
+          className="w-full py-2 rounded-xl border border-gray-700 text-gray-500 text-xs hover:text-gray-300 hover:border-gray-500 transition-colors">
+          📖 게임 가이드 보기
+        </button>
+      </div>
+
       {/* 하단 버전 */}
-      <div className="mt-auto pb-6 pt-8">
-        <p className="text-gray-600 text-xs text-center tracking-wider">v1.6.0 · 3행 전투 그리드 · 행 이동 회피 시스템</p>
+      <div className="mt-auto pb-6 pt-4">
+        <p className="text-gray-700 text-xs text-center tracking-wider">v1.6.0 · T of Sword</p>
       </div>
     </div>
   );
 }
 
-function BattleLog({ logs }: { logs: string[] }) {
+function BattleLog({ logs, compact }: { logs: string[]; compact?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [logs]);
+  if (compact) {
+    const recent = logs.slice(-3);
+    return (
+      <div ref={ref} className="overflow-hidden rounded p-1 space-y-0.5" style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        {recent.map((l, i) => (
+          <p key={i} className={`text-[10px] leading-tight ${i === recent.length - 1 ? 'text-gray-200' : 'text-gray-600'}`}>{l}</p>
+        ))}
+      </div>
+    );
+  }
   return (
     <div ref={ref} className="h-20 overflow-y-auto bg-gray-950 border border-gray-800 rounded p-2 text-xs space-y-0.5">
       {logs.map((l, i) => (
@@ -1418,12 +1546,13 @@ export default function SwordmastersAscent() {
     setFloor(1); setPlayerPos(1); setEnemyPos(4); setMagicCooldown(0); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
   }, [applyLoadedSave]);
 
-  // 슬롯 새로하기: 저장 삭제 후 이름 입력 → 새 게임
+  // 슬롯 새로하기: 저장 삭제 후 튜토리얼(첫 플레이) 또는 이름 입력
   const handleNewGame = useCallback((slotIndex: number) => {
     setActiveSaveSlot(slotIndex);
     setPlayer(null); setEnemy(null);
-    setPhase('naming');
     setFloor(1); setPlayerPos(1); setEnemyPos(4); setMagicCooldown(0); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
+    const tutorialDone = typeof window !== 'undefined' && localStorage.getItem(TUTORIAL_KEY) === 'true';
+    setPhase(tutorialDone ? 'naming' : 'tutorial');
   }, []);
 
   const updateHighScore = useCallback((newFloor: number) => {
@@ -1512,6 +1641,8 @@ export default function SwordmastersAscent() {
   }, [legacy, spawnIntent]);
 
   const nextFloor = useCallback((p: Character, currentFloor: number) => {
+    // 클리어한 층에 현재 캐릭터를 유령으로 등록 (다음 플레이에서 만날 수 있음)
+    addFloorGhost(currentFloor, p);
     const nf = currentFloor + 1;
     const ghosts = loadFloorGhosts();
     const e = generateEnemy(nf, legacy, ghosts);
@@ -1588,7 +1719,7 @@ export default function SwordmastersAscent() {
       // FloatingText — 수치는 여기서만
       const playerStamDelta = getStaminaDelta(playerMain);
       const enemyStamDelta = getStaminaDelta(intent.mainAction);
-      if (playerStamDelta > 0) showFloat(`체력 +${playerStamDelta}`, 'info', 'player');
+      if (playerStamDelta > 0) showFloat(`⚡+${playerStamDelta}`, 'info', 'player');
 
       if (result.damageDealt > 0) showFloat(
         result.isCritical ? `CRIT! ${result.damageDealt}` : `${result.damageDealt}`,
@@ -1720,7 +1851,7 @@ export default function SwordmastersAscent() {
   // ════════════════════════════════════════════════════════
 
   if (phase === 'start') return (
-    <div className="min-h-screen"><StartScreen highScore={highScore} onSelectSlot={handleSlotSelect} onNewGame={handleNewGame} /></div>
+    <div className="min-h-screen"><StartScreen highScore={highScore} onSelectSlot={handleSlotSelect} onNewGame={handleNewGame} onTutorial={() => setPhase('tutorial')} /></div>
   );
 
   if (phase === 'tutorial') return (
@@ -1811,138 +1942,323 @@ export default function SwordmastersAscent() {
 
   if (!player || !enemy || !intent) return null;
 
-  return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-2 sm:p-4">
-      <div className="w-full max-w-3xl bg-gray-900 rounded-lg shadow-2xl overflow-hidden border border-gray-700">
+  const eStats  = getEffectiveStats(enemy);
+  const pStats  = getEffectiveStats(player);
+  const eEls    = ['bg-red-600','bg-blue-600','bg-green-600','bg-yellow-600','bg-purple-700'];
+  const eElVals = [eStats.elements.fire,eStats.elements.water,eStats.elements.wind,eStats.elements.earth,eStats.elements.dark];
+  const pFlash  = hitFlash === 'player' || hitFlash === 'both';
+  const eFlash  = hitFlash === 'enemy'  || hitFlash === 'both';
 
-        {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 bg-gray-800 border-b border-gray-700 text-sm gap-2">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-            <span className="text-yellow-400 font-bold">⚔️ {floor}층</span>
-            <span className="text-gray-300 text-xs">Lv.{player.level} {player.name}</span>
-            <span className="text-gray-500 text-xs">장비 {player.equipment.length} · 최고 {highScore}층</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className={`text-xs ${magicCooldown > 0 ? 'text-red-400' : 'text-green-400'}`}>
-              마법 {magicCooldown > 0 ? `대기 ${magicCooldown}턴` : '사용 가능'}
-            </div>
-            <button onClick={saveCurrentGame}
-              className="text-[10px] bg-blue-700 hover:bg-blue-600 px-3 py-1 rounded-lg text-white transition-colors">
-              저장
+  // 서브 액션 옵션 계산
+  const subOpts: SubAction[] = playerMain
+    ? (playerMain === '마법 사용' && player.magicSlots.length > 0
+        ? (player.magicSlots as SubAction[])
+        : playerMain === '아이템 사용' && player.inventory.length > 0
+        ? player.inventory.map(it => it.name as SubAction)
+        : (SUB_ACTIONS[playerMain] ?? []) as SubAction[])
+    : [];
+  const subDisabled = (sub: SubAction): boolean => {
+    if (playerMain !== '이동') return false;
+    if (sub === '후퇴'        && playerPos <= 1) return true;
+    if (sub === '전진 압박'   && distance <= 1)  return true;
+    if (sub === '위로 이동'   && playerRow <= COMBAT_ROW_MIN) return true;
+    if (sub === '아래로 이동' && playerRow >= COMBAT_ROW_MAX) return true;
+    return false;
+  };
+  const likelySub = (() => {
+    const all = SUB_ACTIONS[intent.mainAction] as SubAction[];
+    const valid = all.filter(s => {
+      if (s === '전진 압박' && enemyPos <= 1) return false;
+      if (s === '후퇴'      && enemyPos >= 5) return false;
+      if (s === '위로 이동' && enemyRow <= COMBAT_ROW_MIN) return false;
+      if (s === '아래로 이동' && enemyRow >= COMBAT_ROW_MAX) return false;
+      return true;
+    });
+    return valid.length > 0
+      ? valid.reduce((a, b) => (intent.subProbs[b] ?? 0) > (intent.subProbs[a] ?? 0) ? b : a)
+      : all[0];
+  })();
+  const perfectSub = PERFECT_COUNTER[likelySub];
+
+  return (
+    <div className="w-[1280px] h-[720px] relative overflow-hidden"
+      style={{ background: '#050508' }}>
+
+      {/* ══════ 캐릭터 이미지 레이어 ══════ */}
+      {/* 플레이어 — 왼쪽 */}
+      <div className="absolute left-0 top-0 h-full pointer-events-none" style={{ width: '52%' }}>
+        <CharImage src="/chars/player.png" fallback="🛡️" size={600}
+          glow={pFlash ? 'rgba(239,68,68,0.6)' : 'rgba(96,165,250,0.2)'} flash={pFlash} removeWhiteBg />
+      </div>
+      {/* 적 — 오른쪽 */}
+      <div className="absolute right-0 top-0 h-full pointer-events-none flex items-end justify-end" style={{ width: '52%' }}>
+        <CharImage
+          src={enemy.isLegacy ? '/chars/ghost.png' : `/chars/${enemy.id}.png`}
+          fallback={enemy.isLegacy ? '👻' : enemy.isBoss ? '💀' : '⚔️'}
+          size={600}
+          glow={eFlash ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.2)'} flash={eFlash} />
+      </div>
+
+      {/* ══════ 그라디언트 오버레이 ══════ */}
+      <div className="absolute inset-0 pointer-events-none"
+        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.35) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.35) 100%)' }} />
+      <div className="absolute inset-0 pointer-events-none"
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 22%, transparent 55%, rgba(0,0,0,0.92) 100%)' }} />
+
+      {/* ══════ 플로팅 데미지 ══════ */}
+      {/* 플레이어 피격 — 왼쪽 중앙 */}
+      <div className="absolute pointer-events-none" style={{ left: '8%', top: '28%' }}>
+        {floating.filter(f => f.side === 'player').map((ft, i) => (
+          <div key={ft.id} className={`absolute animate-bounce-up font-black drop-shadow-[0_2px_8px_rgba(0,0,0,1)] ${
+            ft.type === 'critical' ? 'text-yellow-300 text-4xl' :
+            ft.type === 'damage'   ? 'text-red-400 text-3xl' :
+            ft.type === 'heal'     ? 'text-green-400 text-2xl' :
+            ft.type === 'miss'     ? 'text-gray-400 text-lg italic' :
+            'text-blue-300 text-sm'
+          }`} style={{ top: `${i * 44}px` }}>{ft.text}</div>
+        ))}
+      </div>
+      {/* 적 피격 — 오른쪽 중앙 */}
+      <div className="absolute pointer-events-none" style={{ right: '8%', top: '28%' }}>
+        {floating.filter(f => f.side === 'enemy').map((ft, i) => (
+          <div key={ft.id} className={`absolute animate-bounce-up font-black drop-shadow-[0_2px_8px_rgba(0,0,0,1)] text-right right-0 ${
+            ft.type === 'critical' ? 'text-yellow-300 text-4xl' :
+            ft.type === 'damage'   ? 'text-orange-300 text-3xl' :
+            ft.type === 'miss'     ? 'text-gray-400 text-lg italic' :
+            'text-blue-300 text-sm'
+          }`} style={{ top: `${i * 44}px` }}>{ft.text}</div>
+        ))}
+      </div>
+
+      {/* ══════ 상단 바 ══════ */}
+      <div className="absolute top-0 left-0 right-0 h-14 flex items-center px-5 gap-4">
+        {/* 왼쪽: 층 + 이름 */}
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="text-yellow-400 font-black text-sm tracking-wide">{floor}F</span>
+          <span className="text-gray-300 text-xs">Lv.<b>{player.level}</b> {player.name}</span>
+          {player.condition && (
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${CONDITION_COLORS[player.condition]}`}
+              style={{ background: 'rgba(0,0,0,0.6)' }}>
+              {CONDITION_LABELS[player.condition]}
+            </span>
+          )}
+        </div>
+
+        {/* 중앙: 서브 액션 버튼 or 적 행동 힌트 */}
+        <div className="flex-1 flex justify-center items-center gap-2">
+          {combatStep === 'select_sub' && playerMain && subOpts.map(sub => {
+            const disabled = subDisabled(sub);
+            const isPerfect = sub === perfectSub;
+            return (
+              <button key={sub} disabled={disabled} onClick={() => !disabled && handleSubSelect(sub)}
+                className={`px-5 py-1.5 text-sm font-bold rounded border transition-all active:scale-95 ${
+                  disabled   ? 'bg-black/40 border-gray-700 text-gray-600 cursor-not-allowed opacity-50' :
+                  isPerfect  ? 'bg-yellow-900/60 border-yellow-500 text-yellow-300 hover:bg-yellow-900/80' :
+                               'bg-black/60 border-gray-600 text-gray-200 hover:bg-black/80 hover:border-gray-400'
+                }`}>
+                {isPerfect && <span className="text-[9px] mr-1">★</span>}{sub}
+              </button>
+            );
+          })}
+          {combatStep === 'select_sub' && (
+            <button onClick={() => { setPlayerMain(null); setCombatStep('select_main'); }}
+              className="px-3 py-1.5 text-xs text-gray-500 border border-gray-700 rounded bg-black/40 hover:text-white">
+              ← 취소
             </button>
+          )}
+          {combatStep === 'select_main' && (
+            <span className="text-[11px] text-gray-600 italic">
+              {ACTION_ICONS[intent.mainAction]} 적: {SUB_ACTION_INFO[likelySub]?.hint ?? '...'}
+            </span>
+          )}
+          {(combatStep === 'rolling' || combatStep === 'result') && (
+            <span className={`text-sm font-bold ${diceRolling ? 'text-yellow-400 animate-pulse' : 'text-white'}`}>
+              {diceRolling ? '🎲 주사위 굴리는 중...' : turnResult ? `${turnResult.message}` : ''}
+            </span>
+          )}
+        </div>
+
+        {/* 오른쪽: 플레이어 HP/MP */}
+        <div className="shrink-0 w-52 space-y-1.5">
+          <div>
+            <div className="flex justify-between text-[9px] mb-0.5">
+              <span className="text-red-400 font-bold">HP {player.hp}</span>
+              <span className="text-gray-600">{player.maxHp}</span>
+            </div>
+            <div className="h-3 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div className="h-full rounded-sm transition-all duration-700"
+                style={{ width: `${Math.max(0,(player.hp/player.maxHp)*100)}%`,
+                  background: player.hp/player.maxHp > 0.5 ? '#ef4444' : player.hp/player.maxHp > 0.25 ? '#f59e0b' : '#dc2626' }} />
+            </div>
+          </div>
+          <div className="h-2 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="h-full rounded-sm bg-blue-400 transition-all duration-700"
+              style={{ width: `${Math.max(0,(player.mp/player.maxMp)*100)}%` }} />
+          </div>
+          {/* 스테미너 */}
+          <div className="h-1.5 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)' }}>
+            <div className="h-full rounded-sm transition-all duration-700"
+              style={{ width: `${Math.max(0,(player.stamina/player.maxStamina)*100)}%`,
+                background: player.stamina/player.maxStamina > 0.5 ? '#ca8a04' : player.stamina/player.maxStamina > 0.25 ? '#ea580c' : '#dc2626' }} />
           </div>
         </div>
 
-        {/* 5칸 전투 그리드 + 캐릭터 상태 */}
-        <BattleGrid
-          playerPos={playerPos} enemyPos={enemyPos}
-          playerRow={playerRow} enemyRow={enemyRow}
-          playerMain={playerMain}
-          playerWeaponRange={player.weaponRange ?? 1}
-          enemy={enemy}
-          player={player}
-          floatingTexts={floating}
-          hitFlash={hitFlash}
-        />
+        {/* 저장 */}
+        <button onClick={saveCurrentGame}
+          className="shrink-0 text-[9px] px-2 py-1 rounded text-gray-500 hover:text-white border border-gray-800 hover:border-gray-600 bg-black/40 transition-all">
+          저장
+        </button>
+      </div>
 
-        {/* Main content */}
-        <div className="p-3 space-y-3">
-          <div className="space-y-3">
+      {/* ══════ 하단 바 ══════ */}
+      <div className="absolute bottom-0 left-0 right-0">
+        {/* 칭호 행 */}
+        {player.titles.length > 0 && (
+          <div className="flex gap-2 px-5 mb-2">
+            {player.titles.slice(0,5).map(t => (
+              <span key={t.id} className="text-[9px] px-2 py-0.5 rounded border border-gray-700/50 text-gray-400"
+                style={{ background: 'rgba(0,0,0,0.55)' }}>
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
 
-            <div className="border border-gray-700 rounded-lg p-3">
-              {combatStep === 'select_main' && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-400">행동 유형을 선택하세요</span>
-                    <div className="flex gap-2 text-[10px]">
-                      <span className={distance <= player.weaponRange ? 'text-green-400' : 'text-orange-400'}>
-                        🗡️ 사정거리 {player.weaponRange} / 현재 {distance}
-                      </span>
-                      <span className="text-purple-400">✨ {player.magicSlots.length}/3</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {(['공격','이동','방어','마법 사용'] as ActionType[]).map(action => {
-                      const playerSpellCost = getMagicCostByProgress(floor, player);
-                      const outOfRange = action === '공격' && distance > player.weaponRange;
-                      const disabled = action === '마법 사용' && (player.mp < playerSpellCost || magicCooldown > 0 || player.magicSlots.length === 0);
-                      const bonus = distanceBonus(action, distance);
-                      return (
-                        <button key={action} disabled={disabled} onClick={() => handleMainSelect(action)}
-                          className={`flex flex-col py-2.5 px-3 rounded-lg border text-sm font-semibold transition-all active:scale-95
-                            ${disabled ? 'bg-gray-800 border-gray-700 text-gray-600 cursor-not-allowed'
-                              : outOfRange ? 'bg-orange-950/30 border-orange-700 text-orange-200 hover:bg-orange-900/40 cursor-pointer'
-                              : 'bg-gray-700 border-gray-500 text-white hover:bg-gray-600 cursor-pointer'}`}>
-                          <div className="flex items-center justify-between w-full">
-                            <span>{ACTION_ICONS[action]} {action}</span>
-                            {bonus !== 1.0 && (
-                              <span className={`text-[10px] font-bold ${bonus > 1 ? 'text-green-400' : 'text-red-400'}`}>
-                                {bonus > 1 ? `+${Math.round((bonus-1)*100)}%` : `${Math.round((bonus-1)*100)}%`}
-                              </span>
-                            )}
-                          </div>
-                          {action === '공격' && (
-                            <span className={`text-[9px] mt-0.5 ${outOfRange ? 'text-orange-400 font-bold' : 'text-green-500'}`}>
-                              {outOfRange ? `⚠ 사정거리 초과! (${player.weaponRange} 이내 필요)` : `✓ 범위 내 (${player.weaponRange})`}
-                            </span>
-                          )}
-                          {action === '마법 사용' && (
-                            <span className="text-[9px] mt-0.5 text-purple-400">
-                              슬롯: {player.magicSlots.join(', ') || '없음'}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {/* 아이템 사용 — 전체 너비 */}
-                  {(() => {
-                    const itemCount = player.inventory.length;
-                    const itemDisabled = itemCount === 0;
+        <div className="flex items-end gap-0 px-5 pb-4">
+          {/* ── 왼쪽: 행동 버튼 ── */}
+          <div className="shrink-0" style={{ width: '320px' }}>
+            {combatStep === 'select_main' && (
+              <div className="space-y-1.5">
+                <div className="grid grid-cols-2 gap-1.5">
+                  {([
+                    { action:'공격'    as ActionType, bg:'rgba(120,20,20,0.75)',  border:'rgba(200,50,50,0.6)',  icon:'⚔️' },
+                    { action:'이동'    as ActionType, bg:'rgba(20,50,120,0.75)',  border:'rgba(50,100,200,0.6)', icon:'👣' },
+                    { action:'방어'    as ActionType, bg:'rgba(20,80,30,0.75)',   border:'rgba(50,150,70,0.6)',  icon:'🛡️' },
+                    { action:'마법 사용' as ActionType, bg:'rgba(70,20,120,0.75)', border:'rgba(130,60,200,0.6)', icon:'✨' },
+                  ]).map(({ action, bg, border, icon }) => {
+                    const spellCost  = getMagicCostByProgress(floor, player);
+                    const outOfRange = action === '공격' && distance > player.weaponRange;
+                    const disabled   = action === '마법 사용' && (player.mp < spellCost || magicCooldown > 0 || player.magicSlots.length === 0);
+                    const bonus      = distanceBonus(action, distance);
+                    const aRange     = getActionRange(action, player.weaponRange ?? 1);
                     return (
-                      <button disabled={itemDisabled} onClick={() => handleMainSelect('아이템 사용')}
-                        className={`w-full flex items-center justify-between py-2.5 px-3 rounded-lg border text-sm font-semibold transition-all active:scale-95
-                          ${itemDisabled ? 'bg-gray-800 border-gray-700 text-gray-600 cursor-not-allowed'
-                            : 'bg-gray-700 border-gray-500 text-white hover:bg-gray-600 cursor-pointer'}`}>
-                        <span>🎒 아이템 사용</span>
-                        <span className={`text-[10px] ${itemDisabled ? 'text-gray-600' : 'text-yellow-400'}`}>
-                          {itemDisabled ? '아이템 없음' : `인벤토리: ${player.inventory.map(it => it.name).join(', ')}`}
-                        </span>
+                      <button key={action} disabled={disabled} onClick={() => handleMainSelect(action)}
+                        className={`relative flex items-center gap-2.5 py-2.5 px-3 rounded-lg border transition-all active:scale-95 ${
+                          disabled   ? 'opacity-40 cursor-not-allowed' :
+                          outOfRange ? 'cursor-pointer hover:brightness-125' :
+                                       'cursor-pointer hover:brightness-125'
+                        }`}
+                        style={{ background: disabled ? 'rgba(20,20,30,0.7)' : outOfRange ? 'rgba(90,45,10,0.75)' : bg,
+                          borderColor: disabled ? 'rgba(60,60,80,0.5)' : outOfRange ? 'rgba(160,80,20,0.7)' : border }}>
+                        <span className="text-xl shrink-0">{icon}</span>
+                        <div className="min-w-0">
+                          <div className={`text-sm font-black leading-tight ${disabled ? 'text-gray-600' : outOfRange ? 'text-orange-300' : 'text-white'}`}>{action}</div>
+                          <div className={`text-[9px] leading-none ${disabled ? 'text-gray-700' : outOfRange ? 'text-orange-500' : 'text-gray-400'}`}>
+                            {action === '공격' ? (outOfRange ? `⚠ 사거리 ${aRange}` : `사거리 ${aRange}`) :
+                             action === '마법 사용' ? (disabled ? (magicCooldown > 0 ? `대기 ${magicCooldown}턴` : '사용 불가') : `사거리 ${aRange}`) :
+                             action === '방어' ? '피해 감소' : '위치 이동'}
+                          </div>
+                        </div>
+                        {bonus !== 1.0 && !disabled && (
+                          <span className={`absolute top-1 right-1 text-[8px] font-black px-1 rounded ${bonus > 1 ? 'text-green-300 bg-green-900/50' : 'text-red-300 bg-red-900/50'}`}>
+                            {bonus > 1 ? `+${Math.round((bonus-1)*100)}%` : `${Math.round((bonus-1)*100)}%`}
+                          </span>
+                        )}
                       </button>
                     );
-                  })()}
+                  })}
                 </div>
-              )}
-              {combatStep === 'select_sub' && playerMain && (
-                <div className="space-y-2">
-                  <button
-                    onClick={() => { setPlayerMain(null); setCombatStep('select_main'); }}
-                    className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors px-1 py-0.5">
-                    ← 뒤로
+                {/* 아이템 */}
+                {player.inventory.length > 0 && (
+                  <button onClick={() => handleMainSelect('아이템 사용')}
+                    className="w-full flex items-center gap-2 py-1.5 px-3 rounded-lg border border-yellow-800/50 hover:brightness-125 active:scale-95 cursor-pointer"
+                    style={{ background: 'rgba(60,40,5,0.75)' }}>
+                    <span className="text-lg">🎒</span>
+                    <span className="text-xs font-bold text-yellow-300">아이템 사용</span>
+                    <span className="text-[9px] text-yellow-600 ml-auto">{player.inventory.map(it=>it.name).join(' · ')}</span>
                   </button>
-                  <SubActionPanel playerMain={playerMain} intent={intent} onSelect={handleSubSelect}
-                    playerMagicSlots={player.magicSlots} playerInventory={player.inventory}
-                    playerPos={playerPos} playerRow={playerRow}
-                    enemyPos={enemyPos} enemyRow={enemyRow}
-                    distance={distance} />
+                )}
+              </div>
+            )}
+            {/* 롤링/결과 시 주사위 패널 */}
+            {(combatStep === 'rolling' || combatStep === 'result') && turnResult && (
+              <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <DicePanel result={turnResult} rolling={diceRolling} playerName={player.name} enemyName={enemy.name} />
+                {combatStep === 'result' && enemy.hp > 0 && player.hp > 0 && (
+                  <div className="text-center text-gray-600 text-[10px] pb-2 animate-pulse">다음 턴 대기 중...</div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── 중앙: 위치 인디케이터 ── */}
+          <div className="flex-1 flex flex-col items-center pb-1 gap-1">
+            <span className={`text-xs font-bold ${DISTANCE_COLORS[distance] ?? 'text-gray-400'}`}>
+              {DISTANCE_LABELS[distance] ?? `거리 ${distance}`}
+            </span>
+            <div className="flex gap-0.5">
+              {[1,2,3,4,5].map(pos => (
+                <div key={pos} className={`w-5 h-5 rounded flex items-center justify-center text-[10px] border ${
+                  pos === playerPos ? 'bg-blue-700/80 border-blue-400 text-white font-bold' :
+                  pos === enemyPos  ? 'bg-red-700/80 border-red-400 text-white font-bold' :
+                  'bg-black/30 border-gray-700/50 text-gray-700'
+                }`}>
+                  {pos === playerPos ? 'P' : pos === enemyPos ? 'E' : '·'}
                 </div>
-              )}
-              {(combatStep === 'rolling' || combatStep === 'result') && turnResult && (
-                <div className="space-y-3">
-                  <DicePanel result={turnResult} rolling={diceRolling} playerName={player.name} enemyName={enemy.name} />
-                  {combatStep === 'result' && enemy.hp > 0 && player.hp > 0 && (
-                    <div className="text-center text-gray-600 text-xs animate-pulse">
-                      2.5초 후 자동으로 다음 턴...
-                    </div>
-                  )}
-                </div>
-              )}
+              ))}
+            </div>
+            {/* 배틀 로그 */}
+            <div className="w-full max-w-[200px]">
+              <BattleLog logs={logs} compact />
             </div>
           </div>
-        </div>
 
-        <div className="p-3 border-t border-gray-700">
-          <BattleLog logs={logs} />
+          {/* ── 오른쪽: 적 스탯 ── */}
+          <div className="shrink-0 space-y-1.5" style={{ width: '300px' }}>
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-black text-red-300">{enemy.name}</span>
+              <div className="flex items-center gap-1.5">
+                {enemy.isBoss && <span className="text-[9px] text-yellow-400 font-bold border border-yellow-700/50 px-1.5 rounded" style={{ background:'rgba(0,0,0,0.5)' }}>⚠ BOSS</span>}
+                {enemy.condition && (
+                  <span className={`text-[8px] font-bold px-1 rounded ${CONDITION_COLORS[enemy.condition]}`} style={{ background:'rgba(0,0,0,0.6)' }}>
+                    {CONDITION_LABELS[enemy.condition]}
+                  </span>
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between text-[9px] mb-0.5">
+                <span className="text-red-400 font-bold">HP {enemy.hp}</span>
+                <span className="text-gray-600">{enemy.maxHp}</span>
+              </div>
+              <div className="h-3 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.08)' }}>
+                <div className="h-full bg-red-500 rounded-sm transition-all duration-700"
+                  style={{ width:`${Math.max(0,(enemy.hp/enemy.maxHp)*100)}%` }} />
+              </div>
+            </div>
+            <div className="h-2 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.06)' }}>
+              <div className="h-full bg-purple-500 rounded-sm transition-all duration-700"
+                style={{ width:`${Math.max(0,(enemy.mp/enemy.maxMp)*100)}%` }} />
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-[10px] font-bold ${eStats.strength > pStats.strength ? 'text-red-400' : 'text-green-400'}`}>
+                💪{eStats.strength}
+              </span>
+              <span className={`text-[10px] font-bold ${eStats.agility > pStats.agility ? 'text-red-400' : 'text-green-400'}`}>
+                🥾{eStats.agility}
+              </span>
+              {eElVals.map((v,i) => v > 0 ? <span key={i} className={`${eEls[i]} rounded px-1 text-[7px] text-white font-bold`}>{v}</span> : null)}
+              {enemy.abilities && enemy.abilities.length > 0 && (
+                <span className="text-[8px] text-orange-600/70 truncate max-w-[140px]">
+                  {enemy.abilities.map(a => a.name).join(' · ')}
+                </span>
+              )}
+            </div>
+            {/* 마법 쿨다운 */}
+            {magicCooldown > 0 && (
+              <div className="text-[9px] text-red-500 font-bold">✨ 마법 대기 {magicCooldown}턴</div>
+            )}
+          </div>
         </div>
       </div>
     </div>
