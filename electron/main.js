@@ -1,9 +1,14 @@
-const { app, BrowserWindow, dialog, session } = require('electron');
+const { app, BrowserWindow, dialog, protocol, net } = require('electron');
 const path = require('path');
 const fs   = require('fs');
 const { pathToFileURL } = require('url');
 
 const OUT_DIR = path.join(__dirname, '..', 'out');
+
+// app:// 커스텀 프로토콜 등록 — app.ready 전에 호출해야 함
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { secure: true, standard: true, supportFetchAPI: true } },
+]);
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -22,14 +27,12 @@ function createWindow() {
     show: false,
   });
 
-  // Show window only when content is ready (prevents white flash)
   win.once('ready-to-show', () => {
     win.center();
     win.show();
   });
 
   const indexPath = path.join(OUT_DIR, 'index.html');
-
   if (!fs.existsSync(indexPath)) {
     dialog.showErrorBox(
       'T of Sword — 오류',
@@ -39,31 +42,31 @@ function createWindow() {
     return;
   }
 
-  win.loadFile(indexPath).catch(err => {
+  // app:// 프로토콜로 로드 — 절대 경로(/chars/... 등)가 out/ 기준으로 해석됨
+  win.loadURL('app:///index.html').catch(err => {
     dialog.showErrorBox('T of Sword — 로딩 오류', String(err));
     app.quit();
   });
 
   win.webContents.on('did-fail-load', (_e, code, desc) => {
-    dialog.showErrorBox('T of Sword — 페이지 로딩 실패', `${code}: ${desc}\n경로: ${indexPath}`);
+    dialog.showErrorBox('T of Sword — 페이지 로딩 실패', `${code}: ${desc}`);
   });
 }
 
 app.whenReady().then(() => {
-  // file:// 로드 시 /chars/, /bg/, /enemy/ 같은 절대 경로가
-  // 파일시스템 루트로 해석되는 문제를 out/ 디렉토리로 리다이렉트해서 수정
-  session.defaultSession.webRequest.onBeforeRequest(
-    { urls: ['file:///chars/*', 'file:///bg/*', 'file:///enemy/*'] },
-    (details, callback) => {
-      try {
-        const webPath = decodeURIComponent(new URL(details.url).pathname);
-        const filePath = path.join(OUT_DIR, webPath);
-        callback({ redirectURL: pathToFileURL(filePath).toString() });
-      } catch {
-        callback({});
-      }
+  // app:// 요청을 모두 out/ 디렉토리에서 서빙
+  // /chars/player.png → out/chars/player.png
+  // /_next/static/... → out/_next/static/...
+  protocol.handle('app', async (request) => {
+    try {
+      const url = new URL(request.url);
+      const relPath = decodeURIComponent(url.pathname).replace(/^\//, '') || 'index.html';
+      const filePath = path.join(OUT_DIR, relPath);
+      return await net.fetch(pathToFileURL(filePath).toString());
+    } catch (err) {
+      return new Response(`Not found: ${err}`, { status: 404 });
     }
-  );
+  });
 
   createWindow();
   app.on('activate', () => {
