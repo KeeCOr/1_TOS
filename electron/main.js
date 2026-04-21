@@ -1,6 +1,9 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, session } = require('electron');
 const path = require('path');
 const fs   = require('fs');
+const { pathToFileURL } = require('url');
+
+const OUT_DIR = path.join(__dirname, '..', 'out');
 
 function createWindow() {
   const win = new BrowserWindow({
@@ -20,10 +23,12 @@ function createWindow() {
   });
 
   // Show window only when content is ready (prevents white flash)
-  win.once('ready-to-show', () => win.show());
+  win.once('ready-to-show', () => {
+    win.center();
+    win.show();
+  });
 
-  // Resolve index.html — works both in asar and win-unpacked
-  const indexPath = path.join(__dirname, '..', 'out', 'index.html');
+  const indexPath = path.join(OUT_DIR, 'index.html');
 
   if (!fs.existsSync(indexPath)) {
     dialog.showErrorBox(
@@ -45,6 +50,21 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // file:// 로드 시 /chars/, /bg/, /enemy/ 같은 절대 경로가
+  // 파일시스템 루트로 해석되는 문제를 out/ 디렉토리로 리다이렉트해서 수정
+  session.defaultSession.webRequest.onBeforeRequest(
+    { urls: ['file:///chars/*', 'file:///bg/*', 'file:///enemy/*'] },
+    (details, callback) => {
+      try {
+        const webPath = decodeURIComponent(new URL(details.url).pathname);
+        const filePath = path.join(OUT_DIR, webPath);
+        callback({ redirectURL: pathToFileURL(filePath).toString() });
+      } catch {
+        callback({});
+      }
+    }
+  );
+
   createWindow();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
