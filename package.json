@@ -1,6 +1,6 @@
 {
   "name": "swordmasters-ascent",
-  "version": "1.5.7",
+  "version": "1.5.9",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -14,7 +14,7 @@
   },
   "build": {
     "appId": "com.swordmasters.ascent",
-    "productName": "검사의 승천",
+    "productName": "T of Sword",
     "copyright": "SwordmastersAscent",
     "directories": {
       "output": "release"

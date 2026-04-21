@@ -1117,7 +1117,7 @@ function StartScreen({ highScore, onSelectSlot, onNewGame }: {
         <div className="text-7xl mb-4" style={{ filter: 'drop-shadow(0 0 16px rgba(251,191,36,0.8))' }}>⚔️</div>
         <p className="text-yellow-400 text-xs tracking-[0.4em] uppercase mb-2">Tower of Swords</p>
         <h1 className="text-4xl font-black text-yellow-300 tracking-wider" style={{ textShadow: '0 0 24px rgba(251,191,36,0.5)' }}>
-          검사의 승천
+          T of Sword
         </h1>
         <div className="flex items-center gap-3 mt-5">
           <div className="h-px w-20 bg-yellow-900" />
