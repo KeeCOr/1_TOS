@@ -13,7 +13,12 @@ if (!fs.existsSync(releaseDir)) {
   for (const file of files) {
     if (file.endsWith('.exe') || file.endsWith('.yml') || file === 'win-unpacked') {
       const target = path.join(releaseDir, file);
-      fs.rmSync(target, { recursive: true, force: true });
+      try {
+        fs.rmSync(target, { recursive: true, force: true });
+      } catch (e) {
+        console.warn(`[clean-release] 삭제 실패 (파일 사용 중?): ${file}`);
+        continue;
+      }
       removed++;
     }
   }

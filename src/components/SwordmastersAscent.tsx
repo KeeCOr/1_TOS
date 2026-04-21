@@ -794,147 +794,284 @@ function GameOverScreen({ floor, onRetry, onWatchAd }: {
 // Tutorial Screen
 // ════════════════════════════════════════════════════════════
 
-const TUTORIAL_STEPS: { title: string; subtitle?: string; body: string[]; note?: string }[] = [
+type TutorialStep = {
+  title: string;
+  subtitle?: string;
+  body: string[];
+  note?: string;
+  /** 'intro' = atmospheric world/goal opening; 'system' = game mechanic (default) */
+  variant?: 'intro' | 'system';
+  icon?: string;
+};
+
+const TUTORIAL_STEPS: TutorialStep[] = [
+  // ── 0. 세계관 ─────────────────────────────────────────────
   {
-    title: '세계관',
-    subtitle: '검사들만 사는 탑',
+    variant: 'intro',
+    icon: '🗼',
+    title: '검의 탑',
+    subtitle: '모든 것이 칼로 결정되는 세계',
     body: [
-      '이 탑에 사는 자는 모두 검사입니다.',
-      '연습생부터 원로까지, 탑 안의 모든 존재가 칼을 들고 싸웁니다.',
-      '당신도, 당신이 마주칠 적도, 모두 같은 검사입니다.',
-      '탑을 오를수록 더 강한 검사가 기다립니다.',
+      '저 멀리, 구름을 뚫고 솟은 탑이 있다.',
+      '탑 안에 사는 자는 모두 검사다 — 연습생부터 원로까지.',
+      '이 탑에서 힘이란 곧 칼이며, 칼이 곧 지위다.',
+      '탑을 오를수록 더 강한 검사가 기다린다.',
     ],
   },
+  // ── 1. 목표 ───────────────────────────────────────────────
   {
+    variant: 'intro',
+    icon: '⚔️',
     title: '당신의 목표',
-    subtitle: '탑의 꼭대기로',
+    subtitle: '탑의 꼭대기에 이름을 새겨라',
     body: [
       '층을 올라가며 마주치는 검사를 쓰러뜨리세요.',
-      '한 번 쓰러지면 끝입니다. 목숨은 하나뿐입니다.',
-      '더 높은 층에 도달할수록 당신의 이름이 기록에 남습니다.',
+      '한 번 쓰러지면 끝입니다 — 목숨은 단 하나.',
+      '더 높은 층에 오를수록 이름이 기록에 남습니다.',
       '쓰러진 검사는 유령이 되어 아래 층에 다시 나타납니다.',
     ],
     note: '당신이 쓰러지면 당신의 캐릭터가 다음 플레이의 적으로 등장합니다.',
   },
+  // ── 2. 전투 흐름 ──────────────────────────────────────────
   {
+    variant: 'system',
+    icon: '🎯',
     title: '전투의 흐름',
     subtitle: '매 턴은 두 번의 선택',
     body: [
-      '1단계: 행동을 고릅니다 — 공격, 방어, 이동, 마법, 아이템',
-      '2단계: 세부 기술을 고릅니다 — 각 행동마다 2~4가지',
+      '① 행동 선택 — 공격 / 방어 / 이동 / 마법 / 아이템',
+      '② 세부 기술 선택 — 각 행동마다 2~4가지 기술',
       '선택이 끝나면 주사위를 굴려 결과가 결정됩니다.',
-      '적도 같은 방식으로 행동을 선택합니다.',
+      '적도 동시에 행동을 선택하고, 결과는 한꺼번에 비교됩니다.',
     ],
   },
+  // ── 3. 행동 상성 ──────────────────────────────────────────
   {
+    variant: 'system',
+    icon: '♟',
     title: '행동의 상성',
     subtitle: '무엇이 무엇을 이기는가',
     body: [
       '공격은 이동 중인 적을 잡고, 방어는 공격을 막습니다.',
       '마법은 이동으로 피할 수 있고, 방어는 마법에 뚫립니다.',
-      '행동 선택 화면에서 적의 행동 예상을 보여줍니다.',
+      '행동 선택 화면에서 적의 예상 행동을 표시합니다.',
       '예상을 읽고 유리한 행동을 고르는 것이 핵심입니다.',
     ],
-    note: '상성이 맞으면 더 많은 피해를 주거나 피해를 줄일 수 있습니다.',
+    note: '상성이 맞으면 더 큰 피해를 주거나, 피해를 완전히 막을 수 있습니다.',
   },
+  // ── 4. 세부 기술 & 카운터 ─────────────────────────────────
   {
+    variant: 'system',
+    icon: '🔍',
     title: '세부 기술과 카운터',
     subtitle: '적의 자세를 읽어라',
     body: [
-      '행동을 고른 후 세부 기술을 선택합니다.',
-      '화면에서 적이 어떤 자세를 취하는지 힌트로 보여줍니다.',
+      '행동을 고른 뒤 세부 기술을 선택합니다.',
+      '화면에서 적이 어떤 자세를 취하는지 힌트가 표시됩니다.',
       '힌트를 보고 적의 기술을 예측해 카운터를 고르세요.',
-      '완벽히 맞추면 피해가 크게 늘거나 줄어듭니다.',
+      '완벽히 맞추면 피해가 크게 늘거나 피해를 완전히 무효화합니다.',
     ],
     note: '처음엔 모릅니다. 여러 번 싸우며 패턴을 익히세요.',
   },
+  // ── 5. 거리와 행 ──────────────────────────────────────────
   {
-    title: '거리와 위치',
+    variant: 'system',
+    icon: '📐',
+    title: '거리와 행(行)',
     subtitle: '전장의 공간을 지배하라',
     body: [
-      '전투는 1~5 거리 위에서 이루어집니다.',
-      '공격은 무기 사정거리 안에서만 맞습니다.',
+      '거리 1~5: 무기 사정거리 안에서만 공격이 맞습니다.',
       '가까울수록 공격이 강하고, 멀수록 마법이 강합니다.',
-      '이동으로 거리를 조절하되, 스테미너를 소모하지 않는 유일한 회복 수단입니다.',
+      '행(상/중/하): 물리 공격은 같은 행의 적만 맞힙니다.',
+      '행을 바꾸면 물리 공격을 피하고 틈을 만들 수 있습니다.',
     ],
-    note: '스테미너가 부족하면 능력치가 떨어집니다. 이동으로 스테미너를 유지하세요.',
+    note: '마법과 아이템은 행에 상관없이 항상 맞습니다.',
   },
+  // ── 6. 주사위 & 크리티컬 ─────────────────────────────────
   {
+    variant: 'system',
+    icon: '🎲',
     title: '주사위와 크리티컬',
     subtitle: '힘의 차이가 주사위를 바꾼다',
     body: [
       '피해량은 주사위로 결정됩니다.',
-      '내 힘이 적보다 강할수록 더 많은 주사위를 굴립니다.',
-      '굴린 주사위가 모두 4 이상이면 합산 크리티컬 — 최대 2.8배 피해.',
-      '서로 공격했을 때는 민첩 또는 주사위로 선제권을 겨룹니다.',
+      '내 힘이 강할수록 더 많은 주사위를 굴립니다.',
+      '굴린 주사위가 모두 4 이상이면 크리티컬 — 최대 2.8배 피해.',
+      '맞붙었을 때는 민첩 또는 주사위로 선제권을 겨룹니다.',
     ],
   },
+  // ── 7. 스테미너 & 컨디션 ─────────────────────────────────
   {
-    title: '컨디션과 성장',
-    subtitle: '매 층마다 달라지는 상태',
+    variant: 'system',
+    icon: '⚡',
+    title: '스테미너와 컨디션',
+    subtitle: '몸 상태가 전투를 바꾼다',
     body: [
+      '스테미너가 부족하면 힘과 민첩이 떨어집니다.',
+      '이동 행동은 스테미너를 소모하지 않는 유일한 회복 수단입니다.',
       '층을 이동할 때마다 컨디션이 새로 정해집니다.',
-      '최상(+10%) ~ 최악(-30%) 까지 능력치에 영향을 줍니다.',
-      '장비를 획득하면 능력치가 영구적으로 오릅니다.',
-      '적을 쓰러뜨린 후 장비 획득 / 능력 흡수 / 넘어가기를 선택하세요.',
+      '최상(+10%) ~ 최악(-30%)까지 모든 능력치에 영향을 줍니다.',
     ],
     note: '컨디션이 나빠도 포기하지 마세요. 전략으로 극복할 수 있습니다.',
+  },
+  // ── 8. 보상과 성장 ────────────────────────────────────────
+  {
+    variant: 'system',
+    icon: '🏆',
+    title: '보상과 성장',
+    subtitle: '적을 쓰러뜨리면 선택이 기다린다',
+    body: [
+      '적을 처치하면 보상 화면에서 하나를 선택합니다.',
+      '장비(T1~T3): 힘·민첩·방어 등 능력치가 영구 상승.',
+      '아이템: 전투 중 사용 가능한 소모품을 획득.',
+      '칭호: 적 능력치 기반으로 생성된 3개 중 하나를 선택해 능력치 보너스를 얻습니다.',
+    ],
+    note: '층이 높을수록 더 강한 티어의 장비가 등장합니다.',
   },
 ];
 
 function TutorialScreen({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
   const current = TUTORIAL_STEPS[step];
-  const isLast = step === TUTORIAL_STEPS.length - 1;
+  const isLast  = step === TUTORIAL_STEPS.length - 1;
+  const isIntro = current.variant === 'intro';
+
+  const systemTotal = TUTORIAL_STEPS.length - 2;
 
   return (
-    <div className="flex flex-col min-h-[480px] bg-gray-950 text-white rounded-lg overflow-hidden">
-      {/* Progress bar */}
-      <div className="flex gap-1 p-3 bg-gray-900 border-b border-gray-800">
-        {TUTORIAL_STEPS.map((_, i) => (
-          <div key={i} className={`flex-1 h-1 rounded-full transition-all duration-300 ${i <= step ? 'bg-yellow-400' : 'bg-gray-700'}`} />
+    <div className={`flex flex-col min-h-[520px] text-white rounded-xl overflow-hidden border ${
+      isIntro ? 'border-yellow-900/60' : 'border-gray-800'
+    }`}
+      style={isIntro
+        ? { background: 'linear-gradient(180deg, #09060f 0%, #130a08 60%, #08080d 100%)' }
+        : { background: '#080c10' }
+      }>
+
+      {/* ── 진행 표시줄 ── */}
+      <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+        {/* 세계관 2칸 */}
+        {[0,1].map(i => (
+          <div key={`l${i}`} className={`h-1 rounded-full transition-all duration-300 ${
+            i < step ? 'bg-yellow-500' : i === step ? 'bg-yellow-400 flex-[2]' : 'bg-gray-700'
+          }`} style={{ flex: i === step ? 2 : 1 }} />
         ))}
+        <div className="w-px h-3 bg-gray-700 mx-0.5 shrink-0" />
+        {/* 시스템 칸들 */}
+        {Array.from({ length: systemTotal }).map((_, i) => {
+          const si = i + 2;
+          return (
+            <div key={`s${i}`} className={`h-1 rounded-full transition-all duration-300`}
+              style={{ flex: si === step ? 2 : 1,
+                background: si < step ? '#3b82f6' : si === step ? '#60a5fa' : '#1f2937' }} />
+          );
+        })}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 flex flex-col justify-center gap-4 p-6 overflow-y-auto">
-        <div>
-          <h2 className="text-xl font-bold text-yellow-400">{current.title}</h2>
-          {current.subtitle && <p className="text-sm text-gray-500 mt-0.5">{current.subtitle}</p>}
+      {/* ── 상단 태그 ── */}
+      <div className="px-4 pb-1">
+        <span className={`text-[10px] font-bold tracking-widest uppercase px-2 py-0.5 rounded-full ${
+          isIntro ? 'bg-yellow-900/50 text-yellow-500' : 'bg-blue-900/40 text-blue-400'
+        }`}>
+          {isIntro ? '세계관' : '시스템 가이드'} &nbsp;{step + 1}/{TUTORIAL_STEPS.length}
+        </span>
+      </div>
+
+      {/* ── 컨텐츠 ── */}
+      <div className="flex-1 flex flex-col justify-center gap-4 px-6 py-4 overflow-y-auto">
+
+        {/* 아이콘 + 제목 */}
+        <div className={`flex items-start gap-3 ${isIntro ? 'mb-2' : ''}`}>
+          {current.icon && (
+            <span className={`shrink-0 leading-none ${isIntro ? 'text-5xl' : 'text-3xl'}`}
+              style={isIntro ? { filter: 'drop-shadow(0 0 12px rgba(251,191,36,0.7))' } : {}}>
+              {current.icon}
+            </span>
+          )}
+          <div>
+            <h2 className={`font-black leading-tight ${
+              isIntro ? 'text-2xl text-yellow-300' : 'text-lg text-blue-300'
+            }`} style={isIntro ? { textShadow: '0 0 16px rgba(251,191,36,0.4)' } : {}}>
+              {current.title}
+            </h2>
+            {current.subtitle && (
+              <p className={`text-xs mt-0.5 ${isIntro ? 'text-yellow-700' : 'text-gray-500'}`}>
+                {current.subtitle}
+              </p>
+            )}
+          </div>
         </div>
+
+        {/* 구분선 (intro만) */}
+        {isIntro && (
+          <div className="flex items-center gap-2 -mt-2 -mb-1">
+            <div className="h-px flex-1 bg-yellow-900/40" />
+            <span className="text-yellow-900 text-xs">✦</span>
+            <div className="h-px flex-1 bg-yellow-900/40" />
+          </div>
+        )}
+
+        {/* 본문 */}
         <ul className="space-y-2.5">
           {current.body.map((line, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-gray-300 leading-relaxed">
-              <span className="text-yellow-600 mt-0.5 shrink-0">▸</span>
+            <li key={i} className={`flex items-start gap-2 leading-relaxed ${
+              isIntro ? 'text-sm text-gray-300' : 'text-sm text-gray-300'
+            }`}>
+              <span className={`mt-0.5 shrink-0 text-xs ${isIntro ? 'text-yellow-700' : 'text-blue-600'}`}>▸</span>
               <span>{line}</span>
             </li>
           ))}
         </ul>
+
+        {/* 노트 */}
         {current.note && (
-          <p className="text-xs text-gray-500 border-l-2 border-gray-700 pl-3 mt-1 leading-relaxed">
+          <p className={`text-xs leading-relaxed border-l-2 pl-3 mt-1 ${
+            isIntro
+              ? 'text-yellow-700/80 border-yellow-900'
+              : 'text-gray-500 border-gray-700'
+          }`}>
             {current.note}
           </p>
         )}
       </div>
 
-      {/* Navigation */}
-      <div className="flex items-center justify-between p-4 bg-gray-900 border-t border-gray-800 gap-3">
+      {/* ── 내비게이션 ── */}
+      <div className={`flex items-center justify-between px-4 py-3 gap-3 border-t ${
+        isIntro ? 'bg-black/30 border-yellow-900/30' : 'bg-gray-900/60 border-gray-800'
+      }`}>
         <button
           onClick={() => setStep(s => Math.max(0, s - 1))}
           disabled={step === 0}
-          className="px-4 py-2 rounded-lg text-sm text-gray-400 border border-gray-700 disabled:opacity-30 hover:bg-gray-800 transition-colors">
+          className="px-4 py-2 rounded-lg text-sm text-gray-400 border border-gray-700 disabled:opacity-20 hover:bg-gray-800 transition-colors">
           이전
         </button>
-        <span className="text-xs text-gray-500">{step + 1} / {TUTORIAL_STEPS.length}</span>
+
+        {/* 페이지 점들 */}
+        <div className="flex gap-1">
+          {TUTORIAL_STEPS.map((_, i) => (
+            <div key={i} onClick={() => setStep(i)}
+              className={`rounded-full cursor-pointer transition-all duration-200 ${
+                i === step
+                  ? `w-4 h-2 ${isIntro ? 'bg-yellow-400' : 'bg-blue-400'}`
+                  : i < step
+                  ? 'w-2 h-2 bg-gray-500'
+                  : 'w-2 h-2 bg-gray-700'
+              }`} />
+          ))}
+        </div>
+
         {isLast ? (
           <button onClick={onComplete}
-            className="px-5 py-2 rounded-lg text-sm font-bold bg-red-700 hover:bg-red-600 text-white transition-all hover:scale-105 active:scale-95">
-            게임 시작
+            className="px-5 py-2 rounded-lg text-sm font-bold bg-yellow-600 hover:bg-yellow-500 text-black transition-all hover:scale-105 active:scale-95">
+            시작 ⚔
           </button>
         ) : (
           <button onClick={() => setStep(s => s + 1)}
-            className="px-4 py-2 rounded-lg text-sm font-bold bg-yellow-700 hover:bg-yellow-600 text-white transition-colors">
-            다음
+            className={`px-4 py-2 rounded-lg text-sm font-bold transition-all hover:scale-105 active:scale-95 ${
+              isIntro
+                ? 'bg-yellow-800 hover:bg-yellow-700 text-yellow-100'
+                : 'bg-blue-800 hover:bg-blue-700 text-blue-100'
+            }`}>
+            다음 →
           </button>
         )}
       </div>
