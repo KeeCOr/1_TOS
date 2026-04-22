@@ -1988,13 +1988,23 @@ export default function SwordmastersAscent() {
       <img src="/bg/background.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none" />
 
       {/* ══════ 캐릭터 이미지 레이어 ══════ */}
-      {/* 플레이어 — 왼쪽 */}
-      <div className="absolute left-0 top-0 h-full pointer-events-none" style={{ width: '52%' }}>
+      {/* 플레이어 — 위치에 따라 좌→우 이동 (pos 1=왼쪽 끝, 5=중앙 방향) */}
+      <div className="absolute top-0 h-full pointer-events-none"
+        style={{
+          left: `${(playerPos - 1) * 60}px`,
+          width: '52%',
+          transition: 'left 0.4s ease',
+        }}>
         <CharImage src="/chars/player.png" fallback="🛡️" size={600}
           glow={pFlash ? 'rgba(239,68,68,0.6)' : 'rgba(96,165,250,0.2)'} flash={pFlash} removeWhiteBg />
       </div>
-      {/* 적 — 오른쪽 */}
-      <div className="absolute right-0 top-0 h-full pointer-events-none flex items-end justify-end" style={{ width: '52%' }}>
+      {/* 적 — 위치에 따라 우→좌 이동 (pos 5=오른쪽 끝, 1=중앙 방향) */}
+      <div className="absolute top-0 h-full pointer-events-none flex items-end justify-end"
+        style={{
+          right: `${(5 - enemyPos) * 60}px`,
+          width: '52%',
+          transition: 'right 0.4s ease',
+        }}>
         <CharImage
           src="/enemy/enemy.png"
           fallback={enemy.isBoss ? '💀' : '⚔️'}
