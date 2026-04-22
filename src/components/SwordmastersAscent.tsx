@@ -130,10 +130,10 @@ function addFloorGhost(targetFloor: number, player: Character) {
 //   유령      → /chars/ghost.png
 //   이미지 없으면 자동으로 이모지 폴백
 function CharImage({
-  src, fallback, size, glow, flash, removeWhiteBg,
+  src, fallback, size, glow, flash,
 }: {
   src: string; fallback: string; size: number;
-  glow?: string; flash?: boolean; removeWhiteBg?: boolean;
+  glow?: string; flash?: boolean;
 }) {
   const [err, setErr] = useState(false);
   useEffect(() => { setErr(false); }, [src]);
@@ -147,10 +147,11 @@ function CharImage({
       className="object-contain select-none"
       style={{
         width: size, height: size,
-        mixBlendMode: removeWhiteBg ? 'multiply' : undefined,
         filter: flash
-          ? `drop-shadow(0 0 14px ${glow ?? 'rgba(255,255,255,0.8)'})`
-          : glow ? `drop-shadow(0 0 8px ${glow})` : undefined,
+          ? `drop-shadow(0 0 18px ${glow ?? 'rgba(255,255,255,0.9)'}) drop-shadow(0 0 4px rgba(0,0,0,1))`
+          : glow
+          ? `drop-shadow(0 0 10px ${glow}) drop-shadow(0 0 3px rgba(0,0,0,0.9))`
+          : 'drop-shadow(0 0 3px rgba(0,0,0,0.9))',
         imageRendering: 'crisp-edges',
       }}
     />
@@ -1996,7 +1997,7 @@ export default function SwordmastersAscent() {
           transition: 'left 0.4s ease',
         }}>
         <CharImage src="/chars/player.png" fallback="🛡️" size={600}
-          glow={pFlash ? 'rgba(239,68,68,0.6)' : 'rgba(96,165,250,0.2)'} flash={pFlash} removeWhiteBg />
+          glow={pFlash ? 'rgba(239,68,68,0.6)' : 'rgba(96,165,250,0.2)'} flash={pFlash} />
       </div>
       {/* 적 — 위치에 따라 우→좌 이동 (pos 5=오른쪽 끝, 1=중앙 방향) */}
       <div className="absolute top-0 h-full pointer-events-none flex items-end justify-end"
@@ -2009,14 +2010,16 @@ export default function SwordmastersAscent() {
           src="/enemy/enemy.png"
           fallback={enemy.isBoss ? '💀' : '⚔️'}
           size={600}
-          glow={eFlash ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.2)'} flash={eFlash} removeWhiteBg />
+          glow={eFlash ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.2)'} flash={eFlash} />
       </div>
 
       {/* ══════ 그라디언트 오버레이 ══════ */}
+      {/* 좌우 캐릭터 뒤 어두운 무대 — 흰 배경 이미지를 자연스럽게 흡수 */}
       <div className="absolute inset-0 pointer-events-none"
-        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.35) 0%, transparent 30%, transparent 70%, rgba(0,0,0,0.35) 100%)' }} />
+        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 22%, transparent 38%, transparent 62%, rgba(0,0,0,0.45) 78%, rgba(0,0,0,0.82) 100%)' }} />
+      {/* 상하 UI 영역 어둡게 */}
       <div className="absolute inset-0 pointer-events-none"
-        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 22%, transparent 55%, rgba(0,0,0,0.92) 100%)' }} />
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.78) 0%, transparent 20%, transparent 52%, rgba(0,0,0,0.94) 100%)' }} />
 
       {/* ══════ 플로팅 데미지 ══════ */}
       {/* 플레이어 피격 — 왼쪽 중앙 */}
@@ -2057,30 +2060,10 @@ export default function SwordmastersAscent() {
           )}
         </div>
 
-        {/* 중앙: 서브 액션 버튼 or 적 행동 힌트 */}
-        <div className="flex-1 flex justify-center items-center gap-2">
-          {combatStep === 'select_sub' && playerMain && subOpts.map(sub => {
-            const disabled = subDisabled(sub);
-            const isPerfect = sub === perfectSub;
-            return (
-              <button key={sub} disabled={disabled} onClick={() => !disabled && handleSubSelect(sub)}
-                className={`px-5 py-1.5 text-sm font-bold rounded border transition-all active:scale-95 ${
-                  disabled   ? 'bg-black/40 border-gray-700 text-gray-600 cursor-not-allowed opacity-50' :
-                  isPerfect  ? 'bg-yellow-900/60 border-yellow-500 text-yellow-300 hover:bg-yellow-900/80' :
-                               'bg-black/60 border-gray-600 text-gray-200 hover:bg-black/80 hover:border-gray-400'
-                }`}>
-                {isPerfect && <span className="text-[9px] mr-1">★</span>}{sub}
-              </button>
-            );
-          })}
-          {combatStep === 'select_sub' && (
-            <button onClick={() => { setPlayerMain(null); setCombatStep('select_main'); }}
-              className="px-3 py-1.5 text-xs text-gray-500 border border-gray-700 rounded bg-black/40 hover:text-white">
-              ← 취소
-            </button>
-          )}
-          {combatStep === 'select_main' && (
-            <span className="text-[11px] text-gray-600 italic">
+        {/* 중앙: 적 행동 힌트 or 주사위 상태 */}
+        <div className="flex-1 flex justify-center items-center">
+          {(combatStep === 'select_main' || combatStep === 'select_sub') && (
+            <span className="text-[11px] text-gray-500 italic">
               {ACTION_ICONS[intent.mainAction]} 적: {SUB_ACTION_INFO[likelySub]?.hint ?? '...'}
             </span>
           )}
@@ -2157,9 +2140,7 @@ export default function SwordmastersAscent() {
                     return (
                       <button key={action} disabled={disabled} onClick={() => handleMainSelect(action)}
                         className={`relative flex items-center gap-2.5 py-2.5 px-3 rounded-lg border transition-all active:scale-95 ${
-                          disabled   ? 'opacity-40 cursor-not-allowed' :
-                          outOfRange ? 'cursor-pointer hover:brightness-125' :
-                                       'cursor-pointer hover:brightness-125'
+                          disabled || outOfRange ? 'cursor-pointer hover:brightness-125' : 'cursor-pointer hover:brightness-125'
                         }`}
                         style={{ background: disabled ? 'rgba(20,20,30,0.7)' : outOfRange ? 'rgba(90,45,10,0.75)' : bg,
                           borderColor: disabled ? 'rgba(60,60,80,0.5)' : outOfRange ? 'rgba(160,80,20,0.7)' : border }}>
@@ -2181,7 +2162,6 @@ export default function SwordmastersAscent() {
                     );
                   })}
                 </div>
-                {/* 아이템 */}
                 {player.inventory.length > 0 && (
                   <button onClick={() => handleMainSelect('아이템 사용')}
                     className="w-full flex items-center gap-2 py-1.5 px-3 rounded-lg border border-yellow-800/50 hover:brightness-125 active:scale-95 cursor-pointer"
@@ -2191,6 +2171,35 @@ export default function SwordmastersAscent() {
                     <span className="text-[9px] text-yellow-600 ml-auto">{player.inventory.map(it=>it.name).join(' · ')}</span>
                   </button>
                 )}
+              </div>
+            )}
+            {/* 서브 액션 — 메인 선택 후 같은 하단 좌측에 표시 */}
+            {combatStep === 'select_sub' && playerMain && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-[11px] text-gray-400 font-bold">{playerMain}</span>
+                  <span className="text-gray-700 text-[10px]">›</span>
+                  <span className="text-[10px] text-gray-500">방식 선택</span>
+                  <button onClick={() => { setPlayerMain(null); setCombatStep('select_main'); }}
+                    className="ml-auto text-[9px] text-gray-600 hover:text-gray-300 border border-gray-800 rounded px-2 py-0.5 bg-black/50 transition-colors">
+                    ← 취소
+                  </button>
+                </div>
+                {subOpts.map(sub => {
+                  const disabled = subDisabled(sub);
+                  const isPerfect = sub === perfectSub;
+                  return (
+                    <button key={sub} disabled={disabled} onClick={() => !disabled && handleSubSelect(sub)}
+                      className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border transition-all active:scale-95 ${
+                        disabled  ? 'opacity-40 cursor-not-allowed bg-black/40 border-gray-800 text-gray-600' :
+                        isPerfect ? 'bg-yellow-900/60 border-yellow-600/70 text-yellow-200 hover:brightness-125' :
+                                    'bg-black/60 border-gray-700/60 text-gray-200 hover:bg-black/80 hover:border-gray-500'
+                      }`}>
+                      <span className="text-sm font-bold">{isPerfect && <span className="text-yellow-400 mr-1.5">★</span>}{sub}</span>
+                      {isPerfect && <span className="text-[9px] text-yellow-600 font-bold">최적</span>}
+                    </button>
+                  );
+                })}
               </div>
             )}
             {/* 롤링/결과 시 주사위 패널 */}
@@ -2204,24 +2213,39 @@ export default function SwordmastersAscent() {
             )}
           </div>
 
-          {/* ── 중앙: 위치 인디케이터 ── */}
-          <div className="flex-1 flex flex-col items-center pb-1 gap-1">
-            <span className={`text-xs font-bold ${DISTANCE_COLORS[distance] ?? 'text-gray-400'}`}>
+          {/* ── 중앙: 위치 인디케이터 + 배틀 로그 ── */}
+          <div className="flex-1 flex flex-col items-center justify-end pb-1 gap-2">
+            {/* 거리 레이블 */}
+            <span className={`text-[11px] font-bold tracking-wide ${DISTANCE_COLORS[distance] ?? 'text-gray-400'}`}>
               {DISTANCE_LABELS[distance] ?? `거리 ${distance}`}
             </span>
-            <div className="flex gap-0.5">
-              {[1,2,3,4,5].map(pos => (
-                <div key={pos} className={`w-5 h-5 rounded flex items-center justify-center text-[10px] border ${
-                  pos === playerPos ? 'bg-blue-700/80 border-blue-400 text-white font-bold' :
-                  pos === enemyPos  ? 'bg-red-700/80 border-red-400 text-white font-bold' :
-                  'bg-black/30 border-gray-700/50 text-gray-700'
-                }`}>
-                  {pos === playerPos ? 'P' : pos === enemyPos ? 'E' : '·'}
-                </div>
-              ))}
+            {/* 바닥 타일 위치 표시 */}
+            <div className="flex items-end gap-1.5">
+              {[1,2,3,4,5].map(pos => {
+                const isP = pos === playerPos;
+                const isE = pos === enemyPos;
+                return (
+                  <div key={pos} className="flex flex-col items-center gap-0.5">
+                    {/* 캐릭터 마커 */}
+                    <div className={`text-[11px] font-black transition-all duration-300 ${isP ? 'text-blue-300' : isE ? 'text-red-400' : 'invisible'}`}>
+                      {isP ? '▼' : '▼'}
+                    </div>
+                    {/* 바닥 타일 */}
+                    <div className="w-11 h-4 rounded-sm transition-all duration-300" style={{
+                      background: isP ? 'rgba(59,130,246,0.55)' : isE ? 'rgba(239,68,68,0.55)' : 'rgba(255,255,255,0.06)',
+                      border: isP ? '1px solid rgba(96,165,250,0.7)' : isE ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.08)',
+                      boxShadow: isP ? '0 0 10px rgba(59,130,246,0.35)' : isE ? '0 0 10px rgba(239,68,68,0.35)' : undefined,
+                    }} />
+                    {/* 위치 번호 */}
+                    <div className={`text-[8px] font-bold transition-colors duration-300 ${isP ? 'text-blue-400' : isE ? 'text-red-400' : 'text-gray-700'}`}>
+                      {isP ? 'P' : isE ? 'E' : pos}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
             {/* 배틀 로그 */}
-            <div className="w-full max-w-[200px]">
+            <div className="w-full max-w-[220px]">
               <BattleLog logs={logs} compact />
             </div>
           </div>
