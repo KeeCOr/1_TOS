@@ -1981,11 +1981,12 @@ export default function SwordmastersAscent() {
   })();
   const perfectSub = PERFECT_COUNTER[likelySub];
 
-  // 원근감: pos1(플레이어 홈)=전경(크게), pos5(적 홈)=원경(작게)
-  const playerSize = Math.round(640 - (playerPos - 1) * 52); // 640→588→536→484→432
-  const enemySize  = Math.round(640 - (5 - enemyPos) * 52);  // 432→484→536→588→640
-  const playerLeft = (playerPos - 1) * 62;  // px from left
-  const enemyRight = (5 - enemyPos) * 62;   // px from right
+  // 원근감: pos1=전경(크게), pos5=원경(작게)
+  // 화면 720px - bottom 152px = 568px 여유 → 최대 555px로 잘림 방지
+  const playerSize = Math.round(555 - (playerPos - 1) * 45); // 555→510→465→420→375
+  const enemySize  = Math.round(555 - (5 - enemyPos) * 45);  // 375→420→465→510→555
+  const playerLeft = (playerPos - 1) * 62;
+  const enemyRight = (5 - enemyPos) * 62;
 
   return (
     <div className="w-[1280px] h-[720px] relative overflow-hidden"
