@@ -1981,6 +1981,12 @@ export default function SwordmastersAscent() {
   })();
   const perfectSub = PERFECT_COUNTER[likelySub];
 
+  // 원근감: pos1(플레이어 홈)=전경(크게), pos5(적 홈)=원경(작게)
+  const playerSize = Math.round(640 - (playerPos - 1) * 52); // 640→588→536→484→432
+  const enemySize  = Math.round(640 - (5 - enemyPos) * 52);  // 432→484→536→588→640
+  const playerLeft = (playerPos - 1) * 62;  // px from left
+  const enemyRight = (5 - enemyPos) * 62;   // px from right
+
   return (
     <div className="w-[1280px] h-[720px] relative overflow-hidden"
       style={{ background: '#050508' }}>
@@ -1988,28 +1994,25 @@ export default function SwordmastersAscent() {
       {/* ══════ 배경 이미지 ══════ */}
       <img src="/bg/background.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none" />
 
-      {/* ══════ 캐릭터 이미지 레이어 ══════ */}
-      {/* 플레이어 — 위치에 따라 좌→우 이동 (pos 1=왼쪽 끝, 5=중앙 방향) */}
-      <div className="absolute top-0 h-full pointer-events-none"
+      {/* ══════ 캐릭터 스테이지 (상단바 아래 ~ 하단UI 위) ══════ */}
+      {/* 플레이어 — 바닥 앵커, pos1=전경(크게) / pos5=원경(작게+위) */}
+      <div className="absolute pointer-events-none flex items-end"
         style={{
-          left: `${(playerPos - 1) * 60}px`,
-          width: '52%',
-          transition: 'left 0.4s ease',
+          left: `${playerLeft}px`,
+          bottom: '152px',
+          transition: 'left 0.4s ease, width 0.4s ease',
         }}>
-        <CharImage src="/chars/player.png" fallback="🛡️" size={600}
+        <CharImage src="/chars/player.png" fallback="🛡️" size={playerSize}
           glow={pFlash ? 'rgba(239,68,68,0.6)' : 'rgba(96,165,250,0.2)'} flash={pFlash} />
       </div>
-      {/* 적 — 위치에 따라 우→좌 이동 (pos 5=오른쪽 끝, 1=중앙 방향) */}
-      <div className="absolute top-0 h-full pointer-events-none flex items-end justify-end"
+      {/* 적 — 바닥 앵커, pos5=전경(크게) / pos1=원경(작게) */}
+      <div className="absolute pointer-events-none flex items-end"
         style={{
-          right: `${(5 - enemyPos) * 60}px`,
-          width: '52%',
-          transition: 'right 0.4s ease',
+          right: `${enemyRight}px`,
+          bottom: '152px',
+          transition: 'right 0.4s ease, width 0.4s ease',
         }}>
-        <CharImage
-          src="/enemy/enemy.png"
-          fallback={enemy.isBoss ? '💀' : '⚔️'}
-          size={600}
+        <CharImage src="/enemy/enemy.png" fallback={enemy.isBoss ? '💀' : '⚔️'} size={enemySize}
           glow={eFlash ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.2)'} flash={eFlash} />
       </div>
 
@@ -2047,21 +2050,48 @@ export default function SwordmastersAscent() {
       </div>
 
       {/* ══════ 상단 바 ══════ */}
-      <div className="absolute top-0 left-0 right-0 h-14 flex items-center px-5 gap-4">
-        {/* 왼쪽: 층 + 이름 */}
-        <div className="flex items-center gap-3 shrink-0">
-          <span className="text-yellow-400 font-black text-sm tracking-wide">{floor}F</span>
-          <span className="text-gray-300 text-xs">Lv.<b>{player.level}</b> {player.name}</span>
-          {player.condition && (
-            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${CONDITION_COLORS[player.condition]}`}
-              style={{ background: 'rgba(0,0,0,0.6)' }}>
-              {CONDITION_LABELS[player.condition]}
-            </span>
-          )}
+      <div className="absolute top-0 left-0 right-0 flex items-start px-4 pt-2 pb-2 gap-3"
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.75) 0%, transparent 100%)' }}>
+
+        {/* ── 좌측: 플레이어 정보 + HP/MP ── */}
+        <div className="shrink-0 space-y-1" style={{ width: '220px' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-yellow-400 font-black text-sm">{floor}F</span>
+            <span className="text-gray-300 text-xs">Lv.<b>{player.level}</b> {player.name}</span>
+            {player.condition && (
+              <span className={`text-[9px] font-bold px-1 py-0.5 rounded ${CONDITION_COLORS[player.condition]}`}
+                style={{ background: 'rgba(0,0,0,0.6)' }}>
+                {CONDITION_LABELS[player.condition]}
+              </span>
+            )}
+          </div>
+          {/* HP */}
+          <div>
+            <div className="flex justify-between text-[9px] mb-0.5">
+              <span className="text-red-400 font-bold">HP {player.hp}</span>
+              <span className="text-gray-600">{player.maxHp}</span>
+            </div>
+            <div className="h-2.5 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div className="h-full rounded-sm transition-all duration-700"
+                style={{ width: `${Math.max(0,(player.hp/player.maxHp)*100)}%`,
+                  background: player.hp/player.maxHp > 0.5 ? '#ef4444' : player.hp/player.maxHp > 0.25 ? '#f59e0b' : '#dc2626' }} />
+            </div>
+          </div>
+          {/* MP */}
+          <div className="h-1.5 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div className="h-full rounded-sm bg-blue-400 transition-all duration-700"
+              style={{ width: `${Math.max(0,(player.mp/player.maxMp)*100)}%` }} />
+          </div>
+          {/* 스태미나 */}
+          <div className="h-1 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.5)' }}>
+            <div className="h-full rounded-sm transition-all duration-700"
+              style={{ width: `${Math.max(0,(player.stamina/player.maxStamina)*100)}%`,
+                background: player.stamina/player.maxStamina > 0.5 ? '#ca8a04' : '#ea580c' }} />
+          </div>
         </div>
 
-        {/* 중앙: 적 행동 힌트 or 주사위 상태 */}
-        <div className="flex-1 flex justify-center items-center">
+        {/* ── 중앙: 적 행동 힌트 or 주사위 상태 ── */}
+        <div className="flex-1 flex justify-center items-center pt-1">
           {(combatStep === 'select_main' || combatStep === 'select_sub') && (
             <span className="text-[11px] text-gray-500 italic">
               {ACTION_ICONS[intent.mainAction]} 적: {SUB_ACTION_INFO[likelySub]?.hint ?? '...'}
@@ -2074,36 +2104,46 @@ export default function SwordmastersAscent() {
           )}
         </div>
 
-        {/* 오른쪽: 플레이어 HP/MP */}
-        <div className="shrink-0 w-52 space-y-1.5">
+        {/* ── 우측: 적 HP/MP + 이름 + 저장 ── */}
+        <div className="shrink-0 space-y-1" style={{ width: '220px' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5">
+              <span className="text-red-300 text-sm font-black">{enemy.name}</span>
+              {enemy.isBoss && <span className="text-[8px] text-yellow-400 font-bold border border-yellow-700/50 px-1 rounded" style={{ background:'rgba(0,0,0,0.5)' }}>BOSS</span>}
+              {enemy.condition && (
+                <span className={`text-[8px] font-bold px-1 rounded ${CONDITION_COLORS[enemy.condition]}`} style={{ background:'rgba(0,0,0,0.6)' }}>
+                  {CONDITION_LABELS[enemy.condition]}
+                </span>
+              )}
+            </div>
+            <button onClick={saveCurrentGame}
+              className="text-[9px] px-2 py-0.5 rounded text-gray-500 hover:text-white border border-gray-800 hover:border-gray-600 bg-black/40 transition-all">
+              저장
+            </button>
+          </div>
+          {/* 적 HP */}
           <div>
             <div className="flex justify-between text-[9px] mb-0.5">
-              <span className="text-red-400 font-bold">HP {player.hp}</span>
-              <span className="text-gray-600">{player.maxHp}</span>
+              <span className="text-red-400 font-bold">HP {enemy.hp}</span>
+              <span className="text-gray-600">{enemy.maxHp}</span>
             </div>
-            <div className="h-3 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.1)' }}>
-              <div className="h-full rounded-sm transition-all duration-700"
-                style={{ width: `${Math.max(0,(player.hp/player.maxHp)*100)}%`,
-                  background: player.hp/player.maxHp > 0.5 ? '#ef4444' : player.hp/player.maxHp > 0.25 ? '#f59e0b' : '#dc2626' }} />
+            <div className="h-2.5 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.08)' }}>
+              <div className="h-full bg-red-500 rounded-sm transition-all duration-700"
+                style={{ width:`${Math.max(0,(enemy.hp/enemy.maxHp)*100)}%` }} />
             </div>
           </div>
-          <div className="h-2 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="h-full rounded-sm bg-blue-400 transition-all duration-700"
-              style={{ width: `${Math.max(0,(player.mp/player.maxMp)*100)}%` }} />
+          {/* 적 MP */}
+          <div className="h-1.5 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.06)' }}>
+            <div className="h-full bg-purple-500 rounded-sm transition-all duration-700"
+              style={{ width:`${Math.max(0,(enemy.mp/enemy.maxMp)*100)}%` }} />
           </div>
-          {/* 스테미너 */}
-          <div className="h-1.5 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)' }}>
-            <div className="h-full rounded-sm transition-all duration-700"
-              style={{ width: `${Math.max(0,(player.stamina/player.maxStamina)*100)}%`,
-                background: player.stamina/player.maxStamina > 0.5 ? '#ca8a04' : player.stamina/player.maxStamina > 0.25 ? '#ea580c' : '#dc2626' }} />
+          {/* 적 스탯 요약 */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[9px] font-bold ${eStats.strength > pStats.strength ? 'text-red-400' : 'text-green-400'}`}>💪{eStats.strength}</span>
+            <span className={`text-[9px] font-bold ${eStats.agility > pStats.agility ? 'text-red-400' : 'text-green-400'}`}>🥾{eStats.agility}</span>
+            {magicCooldown > 0 && <span className="text-[8px] text-red-500">✨{magicCooldown}턴</span>}
           </div>
         </div>
-
-        {/* 저장 */}
-        <button onClick={saveCurrentGame}
-          className="shrink-0 text-[9px] px-2 py-1 rounded text-gray-500 hover:text-white border border-gray-800 hover:border-gray-600 bg-black/40 transition-all">
-          저장
-        </button>
       </div>
 
       {/* ══════ 하단 바 ══════ */}
@@ -2213,88 +2253,79 @@ export default function SwordmastersAscent() {
             )}
           </div>
 
-          {/* ── 중앙: 위치 인디케이터 + 배틀 로그 ── */}
+          {/* ── 중앙: 원근감 위치 그리드 + 배틀 로그 ── */}
           <div className="flex-1 flex flex-col items-center justify-end pb-1 gap-2">
-            {/* 거리 레이블 */}
             <span className={`text-[11px] font-bold tracking-wide ${DISTANCE_COLORS[distance] ?? 'text-gray-400'}`}>
               {DISTANCE_LABELS[distance] ?? `거리 ${distance}`}
             </span>
-            {/* 바닥 타일 위치 표시 */}
-            <div className="flex items-end gap-1.5">
-              {[1,2,3,4,5].map(pos => {
-                const isP = pos === playerPos;
-                const isE = pos === enemyPos;
-                return (
-                  <div key={pos} className="flex flex-col items-center gap-0.5">
-                    {/* 캐릭터 마커 */}
-                    <div className={`text-[11px] font-black transition-all duration-300 ${isP ? 'text-blue-300' : isE ? 'text-red-400' : 'invisible'}`}>
-                      {isP ? '▼' : '▼'}
-                    </div>
-                    {/* 바닥 타일 */}
-                    <div className="w-11 h-4 rounded-sm transition-all duration-300" style={{
-                      background: isP ? 'rgba(59,130,246,0.55)' : isE ? 'rgba(239,68,68,0.55)' : 'rgba(255,255,255,0.06)',
-                      border: isP ? '1px solid rgba(96,165,250,0.7)' : isE ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.08)',
-                      boxShadow: isP ? '0 0 10px rgba(59,130,246,0.35)' : isE ? '0 0 10px rgba(239,68,68,0.35)' : undefined,
-                    }} />
-                    {/* 위치 번호 */}
-                    <div className={`text-[8px] font-bold transition-colors duration-300 ${isP ? 'text-blue-400' : isE ? 'text-red-400' : 'text-gray-700'}`}>
-                      {isP ? 'P' : isE ? 'E' : pos}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            {/* 원근감 바닥 타일: 바깥(pos1/5)=넓고 높음, 안쪽(pos3)=좁고 낮음 */}
+            {(() => {
+              const tileW = [56, 46, 36, 46, 56];
+              const tileH = [20, 16, 12, 16, 20];
+              // 캐릭터 마커 크기: 원근감 크기에 비례
+              const pMarkerH = Math.round(8 + (1 - (playerPos - 1) / 4) * 10); // 18→8
+              const eMarkerH = Math.round(8 + (1 - (5 - enemyPos) / 4) * 10);
+              return (
+                <div className="flex items-end gap-1">
+                  {[1,2,3,4,5].map((pos, i) => {
+                    const isP = pos === playerPos;
+                    const isE = pos === enemyPos;
+                    return (
+                      <div key={pos} className="flex flex-col items-center" style={{ gap: '2px' }}>
+                        {/* 캐릭터 마커 — 원근감 크기 반영 */}
+                        <div style={{ height: Math.max(pMarkerH, eMarkerH) + 2, display: 'flex', alignItems: 'flex-end' }}>
+                          {isP && (
+                            <div className="rounded-sm font-black text-blue-200 flex items-center justify-center"
+                              style={{ width: pMarkerH, height: pMarkerH, fontSize: pMarkerH * 0.55,
+                                background: 'rgba(59,130,246,0.7)', border: '1px solid rgba(96,165,250,0.8)',
+                                boxShadow: '0 0 8px rgba(59,130,246,0.5)' }}>P</div>
+                          )}
+                          {isE && (
+                            <div className="rounded-sm font-black text-red-200 flex items-center justify-center"
+                              style={{ width: eMarkerH, height: eMarkerH, fontSize: eMarkerH * 0.55,
+                                background: 'rgba(239,68,68,0.7)', border: '1px solid rgba(239,68,68,0.8)',
+                                boxShadow: '0 0 8px rgba(239,68,68,0.5)' }}>E</div>
+                          )}
+                          {!isP && !isE && <div style={{ height: 1 }} />}
+                        </div>
+                        {/* 바닥 타일 */}
+                        <div className="rounded-sm transition-all duration-300" style={{
+                          width: tileW[i], height: tileH[i],
+                          background: isP ? 'rgba(59,130,246,0.45)' : isE ? 'rgba(239,68,68,0.45)' : 'rgba(255,255,255,0.05)',
+                          border: isP ? '1px solid rgba(96,165,250,0.65)' : isE ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.07)',
+                          boxShadow: isP ? '0 0 12px rgba(59,130,246,0.3)' : isE ? '0 0 12px rgba(239,68,68,0.3)' : undefined,
+                        }} />
+                        <div className={`font-bold transition-colors duration-300`}
+                          style={{ fontSize: 7, color: isP ? '#93c5fd' : isE ? '#fca5a5' : '#374151' }}>
+                          {pos}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
             {/* 배틀 로그 */}
             <div className="w-full max-w-[220px]">
               <BattleLog logs={logs} compact />
             </div>
           </div>
 
-          {/* ── 오른쪽: 적 스탯 ── */}
-          <div className="shrink-0 space-y-1.5" style={{ width: '300px' }}>
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-black text-red-300">{enemy.name}</span>
-              <div className="flex items-center gap-1.5">
-                {enemy.isBoss && <span className="text-[9px] text-yellow-400 font-bold border border-yellow-700/50 px-1.5 rounded" style={{ background:'rgba(0,0,0,0.5)' }}>⚠ BOSS</span>}
-                {enemy.condition && (
-                  <span className={`text-[8px] font-bold px-1 rounded ${CONDITION_COLORS[enemy.condition]}`} style={{ background:'rgba(0,0,0,0.6)' }}>
-                    {CONDITION_LABELS[enemy.condition]}
-                  </span>
-                )}
+          {/* ── 우측: 적 어빌리티/속성 상세 ── */}
+          <div className="shrink-0 space-y-1.5" style={{ width: '220px' }}>
+            {eElVals.some(v => v > 0) && (
+              <div className="flex items-center gap-1 flex-wrap">
+                {eElVals.map((v,i) => v > 0 ? <span key={i} className={`${eEls[i]} rounded px-1.5 py-0.5 text-[8px] text-white font-bold`}>{v}</span> : null)}
               </div>
-            </div>
-            <div>
-              <div className="flex justify-between text-[9px] mb-0.5">
-                <span className="text-red-400 font-bold">HP {enemy.hp}</span>
-                <span className="text-gray-600">{enemy.maxHp}</span>
-              </div>
-              <div className="h-3 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.08)' }}>
-                <div className="h-full bg-red-500 rounded-sm transition-all duration-700"
-                  style={{ width:`${Math.max(0,(enemy.hp/enemy.maxHp)*100)}%` }} />
-              </div>
-            </div>
-            <div className="h-2 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.06)' }}>
-              <div className="h-full bg-purple-500 rounded-sm transition-all duration-700"
-                style={{ width:`${Math.max(0,(enemy.mp/enemy.maxMp)*100)}%` }} />
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-[10px] font-bold ${eStats.strength > pStats.strength ? 'text-red-400' : 'text-green-400'}`}>
-                💪{eStats.strength}
-              </span>
-              <span className={`text-[10px] font-bold ${eStats.agility > pStats.agility ? 'text-red-400' : 'text-green-400'}`}>
-                🥾{eStats.agility}
-              </span>
-              {eElVals.map((v,i) => v > 0 ? <span key={i} className={`${eEls[i]} rounded px-1 text-[7px] text-white font-bold`}>{v}</span> : null)}
-              {enemy.abilities && enemy.abilities.length > 0 && (
-                <span className="text-[8px] text-orange-600/70 truncate max-w-[140px]">
-                  {enemy.abilities.map(a => a.name).join(' · ')}
-                </span>
-              )}
-            </div>
-            {/* 마법 쿨다운 */}
-            {magicCooldown > 0 && (
-              <div className="text-[9px] text-red-500 font-bold">✨ 마법 대기 {magicCooldown}턴</div>
             )}
+            {enemy.abilities && enemy.abilities.length > 0 && (
+              <div className="space-y-0.5">
+                {enemy.abilities.map(a => (
+                  <div key={a.name} className="text-[8px] text-orange-500/80 truncate">{a.name}</div>
+                ))}
+              </div>
+            )}
+            <BattleLog logs={logs.slice(-4)} compact />
           </div>
         </div>
       </div>
