@@ -21,7 +21,7 @@ export type GamePhase    = 'start' | 'tutorial' | 'naming' | 'stat_roll' | 'batt
 export type TitleId      = 'weapon_breaker' | 'tower_climber' | 'boss_slayer' | 'magic_adept' | 'survivor' | 'novice' | `combat_${string}`;
 export type MatchQuality = 'perfect' | 'partial' | 'miss';
 export type CombatStep   = 'select_main' | 'select_sub' | 'rolling' | 'result';
-export type DiceMode     = 'highest' | 'sum';   // sum = 합산 크리티컬
+export type DiceMode     = 'highest' | 'sum';   // kept for legacy/internal use
 export type Condition    = 'excellent' | 'good' | 'normal' | 'bad' | 'terrible';
 
 export const CONDITION_LABELS: Record<Condition, string> = {
@@ -50,8 +50,8 @@ export function getConditionMultiplier(c?: Condition): number {
 }
 
 // ── Sub-actions ──────────────────────────────────────────────
-export type AttackSub = '세로 베기' | '가로 베기' | '찌르기';
-export type DefendSub = '정면 막기' | '올려막기' | '흘려막기';
+export type AttackSub = '세로 베기' | '가로 베기' | '찌르기' | '뒤로 베기';
+export type DefendSub = '세로 막기' | '올려막기' | '가로 막기';
 export type MoveSub   = '전진 압박' | '후퇴' | '위로 이동' | '아래로 이동';
 export type ItemSub   = '치유 물약' | '단검 던지기' | '폭발 물약' | '강화 단검' | '대형 치유 물약';
 export type MagicSpell = '화염 쇄도' | '암흑 속박' | '회복술' | '빙결 창' | '번개 일격' | '바람 쇄도';
@@ -65,66 +65,68 @@ export const STARTING_ITEMS: Item[] = [
 
 export const SUB_ACTIONS: Record<ActionType, SubAction[]> = {
   '공격':     ['세로 베기', '가로 베기', '찌르기'],
-  '방어':     ['정면 막기', '올려막기', '흘려막기'],
+  '방어':     ['세로 막기', '올려막기', '가로 막기'],
   '이동':     ['전진 압박', '후퇴', '위로 이동', '아래로 이동'],
   '마법 사용': [...MAGIC_SPELL_POOL],
   '아이템 사용': ['치유 물약', '단검 던지기'],
 };
 
 export const PERFECT_COUNTER: Record<SubAction, SubAction> = {
-  '세로 베기':  '정면 막기',
-  '가로 베기':  '올려막기',
-  '찌르기':     '흘려막기',
-  '정면 막기':  '찌르기',
-  '올려막기':   '가로 베기',
-  '흘려막기':   '세로 베기',
+  '세로 베기':  '올려막기',   // 올려막기가 내리베기를 막아냄
+  '가로 베기':  '세로 막기',  // 세로 막기가 횡단 베기를 막아냄
+  '찌르기':     '가로 막기',  // 가로 막기가 찌르기를 흘려냄
+  '세로 막기':  '세로 베기',  // 세로 베기가 수직 방어를 짓눌러 뚫음
+  '올려막기':   '가로 베기',  // 가로 베기가 올려막기를 옆으로 꺾음
+  '가로 막기':  '찌르기',     // 찌르기가 가로 막기를 뚫고 들어옴
   '전진 압박':  '위로 이동',
   '후퇴':       '전진 압박',
   '위로 이동':  '아래로 이동',
   '아래로 이동':'위로 이동',
   '화염 쇄도':  '위로 이동',
-  '암흑 속박':  '흘려막기',
+  '암흑 속박':  '가로 막기',
   '회복술':     '세로 베기',
   '빙결 창':     '후퇴',
   '치유 물약':  '전진 압박',
-  '단검 던지기':'정면 막기',
+  '단검 던지기':'세로 막기',
   '폭발 물약':  '후퇴',
-  '강화 단검':  '흘려막기',
+  '강화 단검':  '가로 막기',
   '대형 치유 물약': '전진 압박',
   '번개 일격':  '올려막기',
   '바람 쇄도':  '전진 압박',
+  '뒤로 베기':  '전진 압박',
 };
 
 export const SUB_ACTION_INFO: Record<SubAction, { desc: string; counter: string; hint: string }> = {
-  '세로 베기':  { desc: '강력한 내리치기',   counter: '→ 정면 막기', hint: '검을 머리 위로 높이 들어올렸다' },
-  '가로 베기':  { desc: '옆으로 베기+경직',  counter: '→ 올려막기', hint: '검을 옆으로 크게 벌리며 자세를 낮췄다' },
-  '찌르기':     { desc: '빠른 찌르기',       counter: '→ 흘려막기', hint: '검 끝을 앞으로 겨냥하며 중심을 낮췄다' },
-  '정면 막기':  { desc: '정면 방어',         counter: '→ 찌르기',   hint: '검을 수직으로 세워 정면을 가렸다' },
-  '올려막기':   { desc: '위쪽으로 막기',     counter: '→ 가로 베기',hint: '검날을 비스듬히 들어올려 위를 막았다' },
-  '흘려막기':   { desc: '힘을 흘려보내기',   counter: '→ 세로 베기',hint: '검을 옆으로 기울이며 흘려보낼 준비를 했다' },
+  '세로 베기':  { desc: '강력한 내리치기',   counter: '→ 올려막기', hint: '검을 머리 위로 높이 들어올렸다' },
+  '가로 베기':  { desc: '옆으로 베기+경직',  counter: '→ 세로 막기', hint: '검을 옆으로 크게 벌리며 자세를 낮췄다' },
+  '찌르기':     { desc: '빠른 찌르기',       counter: '→ 가로 막기', hint: '검 끝을 앞으로 겨냥하며 중심을 낮췄다' },
+  '세로 막기':  { desc: '수직 방어',         counter: '→ 세로 베기', hint: '검을 수직으로 세워 정면을 가렸다' },
+  '올려막기':   { desc: '위쪽으로 막기',     counter: '→ 가로 베기', hint: '검날을 비스듬히 들어올려 위를 막았다' },
+  '가로 막기':  { desc: '가로로 막아내기',   counter: '→ 찌르기',   hint: '검을 가로로 뻗어 힘을 흘려보낸다' },
   '전진 압박':  { desc: '거리 -1 압박',      counter: '→ 위로 이동',hint: '발을 크게 내딛으며 앞으로 밀어붙였다' },
   '후퇴':       { desc: '거리 +1 후퇴',      counter: '→ 전진 압박',hint: '뒷발을 당기며 거리를 벌렸다' },
   '위로 이동':  { desc: '위 행으로 이동',    counter: '→ 아래로 이동', hint: '옆으로 크게 발을 옮기며 위치를 바꿨다' },
   '아래로 이동':{ desc: '아래 행으로 이동',  counter: '→ 위로 이동', hint: '낮게 자세를 잡으며 아래쪽으로 이동했다' },
   '화염 쇄도':  { desc: '화염 마법 공격',    counter: '→ 위로 이동',hint: '손바닥에 붉은 불꽃이 피어오르기 시작했다' },
-  '암흑 속박':  { desc: '속박 마법',         counter: '→ 흘려막기', hint: '손끝에서 검은 연기가 소용돌이치기 시작했다' },
+  '암흑 속박':  { desc: '속박 마법',         counter: '→ 가로 막기', hint: '손끝에서 검은 연기가 소용돌이치기 시작했다' },
   '회복술':     { desc: '체력 회복',         counter: '→ 세로 베기', hint: '몸 주위에 희미한 빛이 감돌기 시작했다' },
   '빙결 창':    { desc: '얼음 창을 던진다',  counter: '→ 후퇴',     hint: '팔을 들어올리며 차가운 기운이 모였다' },
   '치유 물약':  { desc: '체력 회복 물약 사용', counter: '→ 전진 압박', hint: '허리춤에서 무언가를 꺼내 들었다' },
-  '단검 던지기':{ desc: '원거리 단검 공격',  counter: '→ 정면 막기', hint: '작은 단검을 손에 쥐고 팔을 뒤로 당겼다' },
+  '단검 던지기':{ desc: '원거리 단검 공격',  counter: '→ 세로 막기', hint: '작은 단검을 손에 쥐고 팔을 뒤로 당겼다' },
   '폭발 물약':  { desc: '폭발 피해 (방어 무시)', counter: '→ 후퇴', hint: '주머니에서 붉게 빛나는 구슬을 꺼내 들었다' },
-  '강화 단검':  { desc: '강력한 단검 투척',   counter: '→ 흘려막기', hint: '무거운 단검을 손에 쥐고 조준했다' },
+  '강화 단검':  { desc: '강력한 단검 투척',   counter: '→ 가로 막기', hint: '무거운 단검을 손에 쥐고 조준했다' },
   '대형 치유 물약': { desc: '체력 50 대량 회복', counter: '→ 전진 압박', hint: '큼지막한 물약을 꺼내 뚜껑을 열었다' },
   '번개 일격':  { desc: '번개 마법 공격',     counter: '→ 올려막기', hint: '팔끝에서 파란 전기가 지직거리기 시작했다' },
   '바람 쇄도':  { desc: '바람 마법 공격',     counter: '→ 전진 압박', hint: '양손이 바람을 끌어모으며 소용돌이쳤다' },
+  '뒤로 베기':  { desc: '후퇴하며 베기 (밀착 전용)', counter: '→ 전진 압박', hint: '물러서면서 검을 옆으로 긋는다' },
 };
 
 // ── Distance ─────────────────────────────────────────────────
 export const DISTANCE_LABELS: Record<number, string> = {
-  1: '밀착', 2: '근접', 3: '중거리', 4: '원거리', 5: '최원거리',
+  0: '동일 칸', 1: '밀착', 2: '근접', 3: '중거리', 4: '원거리', 5: '최원거리',
 };
 export const DISTANCE_COLORS: Record<number, string> = {
-  1: 'text-red-400', 2: 'text-orange-400', 3: 'text-yellow-400',
+  0: 'text-yellow-300', 1: 'text-red-400', 2: 'text-orange-400', 3: 'text-yellow-400',
   4: 'text-blue-400', 5: 'text-purple-400',
 };
 
@@ -132,6 +134,7 @@ export const DISTANCE_COLORS: Record<number, string> = {
 export const SUB_DISTANCE_DELTA: Partial<Record<SubAction, number>> = {
   '전진 압박': -1,
   '후퇴':      +1,
+  '뒤로 베기': +1, // 후퇴하며 공격: 플레이어가 1칸 물러남
 };
 
 // ── Row (Y-axis) movement ─────────────────────────────────────
@@ -189,10 +192,10 @@ export function getEffectiveStats(character: Character): Character['stats'] {
 
 export function getStaminaDelta(action: ActionType): number {
   switch (action) {
-    case '이동':      return 4;   // 이동 회복량 감소 — 더 적극적 이동 필요
-    case '방어':      return -6;
+    case '이동':      return 10;
+    case '방어':      return 4;   // 소극적 행동이라 회복 적음
     case '공격':      return -13;
-    case '마법 사용': return -16;
+    case '마법 사용': return -8;  // MP 제한이 이미 있으므로 스테미나 소모 축소
     case '아이템 사용': return -6;
     default: return 0;
   }
@@ -216,20 +219,17 @@ export function calcNewPositions(
   np = Math.max(1, Math.min(5, np));
   ne = Math.max(1, Math.min(5, ne));
 
-  // Prevent overlap (must maintain at least 1 gap)
-  if (np >= ne) {
-    if (pDelta !== 0 && eDelta === 0) np = ne - 1;       // only player moved → revert player
-    else if (eDelta !== 0 && pDelta === 0) ne = np + 1;  // only enemy moved → push enemy back
-    else if (pDelta < 0 && eDelta < 0) {
-      // Both advancing toward each other — player's advance takes priority
-      ne = enemyPos;                                     // undo enemy advance
-      if (np >= ne) np = ne - 1;                         // still blocked → player also can't advance
-    } else { np = playerPos; ne = enemyPos; }            // other conflict → neither moves
+  // 동일 칸(np === ne)은 허용 — 밀착 전투 발생
+  // 단, 플레이어가 적을 지나칠 수 없음(np > ne는 불가)
+  if (np > ne) {
+    if (pDelta !== 0 && eDelta === 0) np = ne;           // only player moved → clamp to same cell
+    else if (eDelta !== 0 && pDelta === 0) ne = np;      // only enemy moved → clamp to same cell
+    else { np = playerPos; ne = enemyPos; }              // other conflict → neither moves
   }
 
   np = Math.max(1, Math.min(5, np));
   ne = Math.max(1, Math.min(5, ne));
-  if (np >= ne) { np = playerPos; ne = enemyPos; }       // safety fallback
+  if (np > ne) { np = playerPos; ne = enemyPos; }        // safety fallback (no pass-through)
 
   return { playerPos: np, enemyPos: ne };
 }
@@ -250,32 +250,42 @@ export interface EnemyIntent {
   subProbs:   Record<SubAction, number>;
 }
 
-export interface DiceResult {
+// ── 주사위 콘테스트 ─────────────────────────────────────────────
+// 속도 결정 / 힘싸움에서 사용되는 양측 대결 결과
+export interface DiceContest {
+  playerRolls: number[];
+  enemyRolls:  number[];
+  playerTotal: number;
+  enemyTotal:  number;
+  winner: 'player' | 'enemy' | 'tie';
+}
+
+// 마법 성공 판정 주사위
+export interface MagicDiceRoll {
   rolls:     number[];
-  kept:      number;        // highest single die
-  sum:       number;        // sum of all dice
-  mode:      DiceMode;      // 'highest' or 'sum'
-  value:     number;        // the actually-used value (kept or sum)
-  diceCount: number;
+  total:     number;
+  threshold: number;
+  success:   boolean;
 }
 
 export interface TurnResult {
-  quality:       MatchQuality;
-  baseOutcome:   string;
-  playerDice:    DiceResult;
-  enemyDice:     DiceResult;
-  damageTaken:   number;
-  damageDealt:   number;
-  healAmount?:   number;
-  isCritical:    boolean;
-  message:       string;
-  newDistance:   number;
-  newPlayerPos:  number;
-  newEnemyPos:   number;
-  newPlayerRow:  number;
-  newEnemyRow:   number;
-  playerRowMiss: boolean;
-  enemyRowMiss:  boolean;
+  quality:          MatchQuality;
+  baseOutcome:      string;
+  speedContest:     DiceContest;
+  strengthContest?: DiceContest;
+  magicRoll?:       MagicDiceRoll;
+  damageTaken:      number;
+  damageDealt:      number;
+  healAmount?:      number;
+  isCritical:       boolean;
+  message:          string;
+  newDistance:      number;
+  newPlayerPos:     number;
+  newEnemyPos:      number;
+  newPlayerRow:     number;
+  newEnemyRow:      number;
+  playerRowMiss:    boolean;
+  enemyRowMiss:     boolean;
 }
 
 // ── Structural types ─────────────────────────────────────────
@@ -606,26 +616,14 @@ export function rollDice(count: number): number[] {
   return Array.from({ length: Math.max(1, count) }, () => Math.floor(Math.random() * 6) + 1);
 }
 
-export function rollWithAdvantage(count: number): DiceResult {
-  const rolls = rollDice(count);
-  const kept  = Math.max(...rolls);
-  const sum   = rolls.reduce((a, b) => a + b, 0);
-  // Sum mode (합산 크리티컬): ALL dice are 4+
-  const mode: DiceMode = rolls.every(v => v >= 4) ? 'sum' : 'highest';
-  const value = mode === 'sum' ? sum : kept;
-  return { rolls, kept, sum, mode, value, diceCount: count };
-}
-
-/** Damage multiplier from dice result */
-export function diceMultiplier(dr: DiceResult): number {
-  if (dr.mode === 'sum') {
-    // sum ranges from diceCount*4 to diceCount*6
-    const min = dr.diceCount * 4;
-    const max = dr.diceCount * 6;
-    const ratio = (dr.sum - min) / Math.max(1, max - min); // 0 to 1
-    return 1.4 + ratio * 1.4; // 1.4× to 2.8×
-  }
-  return ([0, 0.4, 0.6, 0.8, 1.0, 1.35, 1.8] as const)[dr.kept] ?? 1.0;
+function rollContest(playerCount: number, enemyCount: number): DiceContest {
+  const playerRolls = rollDice(playerCount);
+  const enemyRolls  = rollDice(enemyCount);
+  const playerTotal = playerRolls.reduce((a, b) => a + b, 0);
+  const enemyTotal  = enemyRolls.reduce((a, b) => a + b, 0);
+  const winner: DiceContest['winner'] =
+    playerTotal > enemyTotal ? 'player' : playerTotal < enemyTotal ? 'enemy' : 'tie';
+  return { playerRolls, enemyRolls, playerTotal, enemyTotal, winner };
 }
 
 export function getDiceCount(myStat: number, theirStat: number): number {
@@ -638,10 +636,11 @@ export function getDiceCount(myStat: number, theirStat: number): number {
 
 // ── Match quality ────────────────────────────────────────────
 export function getMatchQuality(
-  playerSub: SubAction, enemySub: SubAction, baseOutcome: string,
+  playerSub: SubAction, enemySub: SubAction,
 ): MatchQuality {
-  if (baseOutcome === 'lose') return 'miss';
-  return PERFECT_COUNTER[enemySub] === playerSub ? 'perfect' : 'partial';
+  if (PERFECT_COUNTER[enemySub] === playerSub) return 'perfect'; // 플레이어가 적 서브를 카운터
+  if (PERFECT_COUNTER[playerSub] === enemySub) return 'miss';    // 적이 플레이어 서브를 카운터
+  return 'partial';
 }
 
 // ── Full turn resolution ─────────────────────────────────────
@@ -654,10 +653,7 @@ export function resolveTurn(
   enemyRow:  number = COMBAT_ROW_DEFAULT,
 ): TurnResult {
   const distance = enemyPos - playerPos;
-  const key = `${playerMain}-${intent.mainAction}` as OutcomeKey;
-  const [playerOutcome] = ACTION_TABLE[key];
-
-  const quality = getMatchQuality(playerSub, intent.subAction, playerOutcome);
+  const quality = getMatchQuality(playerSub, intent.subAction);
   const playerStats = getEffectiveStats(player);
   const enemyStats = getEffectiveStats(enemy);
   const playerWeaponRange = player.weaponRange ?? 1;
@@ -674,274 +670,221 @@ export function resolveTurn(
   const pDistMult = distanceBonus(playerMain, distance);
   const eDistMult = distanceBonus(intent.mainAction, distance);
 
-  // Dice counts
-  let pDice = getDiceCount(playerStats.strength, enemyStats.strength);
-  let eDice = getDiceCount(enemyStats.strength, playerStats.strength);
-  const agiRatio = playerStats.agility / Math.max(1, enemyStats.agility);
-
-  if (quality === 'perfect') pDice = Math.min(5, pDice + 1);
-  if (quality === 'miss')    pDice = Math.max(1, pDice - 1);
-  if ((playerMain === '방어' || playerMain === '이동') && agiRatio >= 1.4)
-    pDice = Math.min(5, pDice + 1);
-
-  // Stamina penalty: low stamina directly reduces dice on top of stat reduction
-  const pStamPct = player.stamina / Math.max(1, player.maxStamina);
-  const eStamPct = enemy.stamina  / Math.max(1, enemy.maxStamina);
-  if (pStamPct < 0.15) pDice = Math.max(1, pDice - 2);
-  else if (pStamPct < 0.30) pDice = Math.max(1, pDice - 1);
-  if (eStamPct < 0.15) eDice = Math.max(1, eDice - 2);
-  else if (eStamPct < 0.30) eDice = Math.max(1, eDice - 1);
-
-  const playerDice = rollWithAdvantage(pDice);
-  const enemyDice  = rollWithAdvantage(eDice);
-
-  const pMult = diceMultiplier(playerDice) * pDistMult;
-  const eMult = diceMultiplier(enemyDice)  * eDistMult;
-
   const pArmorRed = playerStats.armor / 100;
   const eArmorRed = enemyStats.armor  / 100;
 
+  const playerAttacks = playerMain === '공격' || playerMain === '마법 사용' || isThrowingItem;
+  const enemyAttacks  = intent.mainAction === '공격' || intent.mainAction === '마법 사용';
+
+  // ── 1. 속도 결정 주사위 ──────────────────────────────────────
+  // 민첩 상대 비율로 주사위 수 결정 (스테미나 감소 시 effective agility가 이미 낮아짐)
+  const pSpdDice = getDiceCount(playerStats.agility, enemyStats.agility);
+  const eSpdDice = getDiceCount(enemyStats.agility, playerStats.agility);
+  const speedContest = rollContest(pSpdDice, eSpdDice);
+
+  let pSpeedMult = 1.0, eSpeedMult = 1.0;
+  if (speedContest.winner === 'player') { pSpeedMult = 1.2;  eSpeedMult = 0.85; }
+  else if (speedContest.winner === 'enemy')  { pSpeedMult = 0.85; eSpeedMult = 1.2; }
+
+  // 이동: 속도에서 이기면 피해 0으로 회피 (먼저 빠져나감)
+  if (playerMain === '이동' && speedContest.winner === 'player') eSpeedMult = 0;
+
+  // ── 2. 힘싸움 주사위 ────────────────────────────────────────
+  // 힘 상대 비율로 주사위 수 결정 (스테미나 감소 시 effective strength가 이미 낮아짐)
+  let strengthContest: DiceContest | undefined;
+  let pStrMult = 1.0, eStrMult = 1.0;
+  const combatEngaged = (playerAttacks || playerMain === '방어') && (enemyAttacks || intent.mainAction === '방어');
+  if (combatEngaged) {
+    let pStrDice = getDiceCount(playerStats.strength, enemyStats.strength);
+    let eStrDice = getDiceCount(enemyStats.strength, playerStats.strength);
+    // 서브 액션 매칭이 힘싸움 다이스를 추가 조정
+    if (quality === 'perfect') pStrDice = Math.min(4, pStrDice + 1);
+    if (quality === 'miss')    pStrDice = Math.max(1, pStrDice - 1);
+
+    strengthContest = rollContest(pStrDice, eStrDice);
+    const margin = Math.abs(strengthContest.playerTotal - strengthContest.enemyTotal);
+    if (strengthContest.winner === 'player') {
+      pStrMult = margin >= 4 ? 1.5 : 1.25;
+      eStrMult = margin >= 4 ? 0.65 : 0.8;
+    } else if (strengthContest.winner === 'enemy') {
+      pStrMult = margin >= 4 ? 0.65 : 0.8;
+      eStrMult = margin >= 4 ? 1.5 : 1.25;
+    }
+  }
+
+  // ── 3. 마법 성공 주사위 ─────────────────────────────────────
+  // 2d6을 굴려 합계 6 이상이면 성공, 10 이상이면 강화
+  let magicRoll: MagicDiceRoll | undefined;
+  let magicMult = 1.0;
+  if (playerMain === '마법 사용') {
+    const rolls  = rollDice(2);
+    const total  = rolls.reduce((a, b) => a + b, 0);
+    const threshold = 6;
+    const success   = total >= threshold;
+    magicRoll = { rolls, total, threshold, success };
+    if (!success)    magicMult = 0;
+    else if (total >= 10) magicMult = 1.3;
+  }
+
+  // ── 최종 배율 합산 ───────────────────────────────────────────
+  const pFinalMult = pSpeedMult * pStrMult * magicMult * pDistMult;
+  const eFinalMult = eSpeedMult * eStrMult * eDistMult;
+
+  // 양쪽 모두 선제·힘싸움 승리 시 크리티컬
+  const isCritical = speedContest.winner === 'player' &&
+    (strengthContest?.winner === 'player') === true &&
+    speedContest.playerTotal - speedContest.enemyTotal +
+    ((strengthContest?.playerTotal ?? 0) - (strengthContest?.enemyTotal ?? 0)) >= 5;
+
   let damageDealt = 0, damageTaken = 0;
-  let isCritical = false;
   let message = '';
 
-  switch (playerOutcome) {
-    case 'win': {
-      if (playerMain === '이동') {
-        damageDealt = 0;
-        message = '위치 선점 성공 — 거리 조절';
-      } else if (playerMain === '아이템 사용') {
-        if (playerSub === '단검 던지기') {
-          if (!itemCanHit) {
-            damageDealt = 0;
-            message = '단검이 사정 거리 밖으로 벗어났다';
-          } else {
-            damageDealt = Math.max(1, Math.floor(playerStats.strength * 0.9 * pMult * (1 - eArmorRed)));
-            isCritical = playerDice.mode === 'sum';
-            message = quality === 'perfect' ? '단검이 치명타로 명중!' : '단검이 적중했다';
-          }
-        } else if (playerSub === '강화 단검') {
-          if (!itemCanHit) {
-            damageDealt = 0;
-            message = '강화 단검이 사정 거리 밖으로 벗어났다';
-          } else {
-            damageDealt = Math.max(1, Math.floor(playerStats.strength * 1.2 * pMult * (1 - eArmorRed)));
-            isCritical = playerDice.mode === 'sum';
-            message = quality === 'perfect' ? '강화 단검 치명타!' : '강화 단검 적중!';
-          }
-        } else if (playerSub === '폭발 물약') {
-          if (!itemCanHit) {
-            damageDealt = 0;
-            message = '폭발 물약이 사정 거리 밖으로 빗나갔다';
-          } else {
-            // 방어구 무시 고정 피해
-            damageDealt = Math.max(1, Math.floor(32 * pMult));
-            isCritical = playerDice.mode === 'sum';
-            message = quality === 'perfect' ? '폭발 물약 치명 폭발!' : '폭발 물약이 터졌다!';
-          }
-        } else {
-          damageDealt = 0;
-          message = '치유 물약을 사용했다';
-        }
-      } else {
-        const spellPower = playerMain === '마법 사용'
-          ? Math.floor(playerStats.strength * 0.7 + (player.stats.elements.fire + player.stats.elements.dark) * 0.3)
-          : playerStats.strength;
-        damageDealt = Math.max(1, Math.floor(spellPower * pMult * (1 - eArmorRed)));
-        isCritical = playerDice.mode === 'sum';
-        if (playerMain === '마법 사용') {
-          message = quality === 'perfect' ? '마법 폭발! 강력한 일격' : '마법으로 적중';
-          if (isCritical) message = '마법 합산 크리티컬! 🔥';
-        } else {
-          message = quality === 'perfect' ? '완벽 대응! 직격!' : '공격 성공';
-          if (isCritical) message = '합산 크리티컬! 🔥';
-        }
-      }
-      break;
-    }
-    case 'lose': {
-      if (intent.mainAction === '이동') {
-        damageTaken = 0;
-        message = '적이 위치를 바꿨다';
-      } else if (intent.mainAction === '공격' && !enemyInRange) {
-        damageTaken = 0;
-        message = '적의 공격이 사정 거리 밖으로 벗어났다';
-      } else {
-        const red = quality === 'perfect' ? 0.4 : quality === 'partial' ? 0.7 : 1.0;
-        damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * red * (1 - pArmorRed)));
-        isCritical = enemyDice.mode === 'sum';
-        message = quality === 'perfect' ? '반응 방어 — 피해 감소' : '피격!';
-      }
-      break;
-    }
-    case 'block': {
-      if (playerMain === '방어') {
-        const strengthGap = enemyStats.strength / Math.max(1, playerStats.strength);
-        if (quality === 'perfect') {
-          if (strengthGap > 1.1) {
-            damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * 0.25 * (1 - pArmorRed)));
-            message = '방어했지만 힘이 부족해 일부 피해';
-          } else {
-            damageDealt = Math.max(1, Math.floor(playerStats.strength * 0.6 * pMult * (1 - eArmorRed)));
-            message = '완벽 차단 + 반격!';
-          }
-        } else if (quality === 'partial') {
-          damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * 0.35 * (1 - pArmorRed)));
-          message = '방어 성공 (일부 피해)';
-        } else {
-          damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * 0.6 * (1 - pArmorRed)));
-          message = '방어 실패!';
-        }
-      } else {
-        if (quality === 'perfect') {
-          damageDealt = Math.max(1, Math.floor(playerStats.strength * pMult * 0.8 * (1 - eArmorRed)));
-          message = '가드 파괴!';
-        } else if (quality === 'partial') {
-          damageDealt = Math.max(1, Math.floor(playerStats.strength * pMult * 0.3 * (1 - eArmorRed)));
-          message = '방어를 일부 뚫었다';
-        } else {
-          message = '공격이 완전히 막혔다!';
-        }
-      }
-      break;
-    }
-    case 'draw': {
-      // 투척 아이템 vs 적 이동 — 전진하는 적에게는 빗나감
-      if (isThrowingItem && intent.mainAction === '이동') {
-        damageDealt = 0;
-        message = '던졌지만 전진하는 적의 기세에 밀려 빗나갔다';
-        break;
-      }
-      // 공격/마법 행동만 draw에서 피해를 줄 수 있음 — 이동·방어·아이템은 데미지 없음
-      const playerDealsInDraw = playerMain === '공격' || playerMain === '마법 사용' || isThrowingItem;
-      const enemyDealsInDraw  = intent.mainAction === '공격' || intent.mainAction === '마법 사용';
+  // ── 투척 원거리 회피: 속도 주사위로 피했는지 판정 ──────────
+  const rangedDodged = isThrowingItem && itemCanHit && speedContest.winner === 'enemy';
 
-      if (playerDealsInDraw || enemyDealsInDraw) {
-        const agiDiff  = playerStats.agility - enemyStats.agility;
-        const bigSpeed = Math.abs(agiDiff) >= 12; // 민첩 차이가 크면 선제권
-
-        if (bigSpeed) {
-          // 민첩 우세 → 빠른 쪽이 선제 타격, 느린 쪽은 반격 감소
-          const playerFaster = agiDiff > 0;
-          if (playerFaster) {
-            if (playerDealsInDraw && playerInRange)
-              damageDealt = Math.max(1, Math.floor(playerStats.strength * pMult * 0.85 * (1 - eArmorRed)));
-            if (enemyDealsInDraw && enemyInRange)
-              damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * 0.25 * (1 - pArmorRed)));
-            message = '민첩 우세 — 선제 공격!';
-          } else {
-            if (playerDealsInDraw && playerInRange)
-              damageDealt = Math.max(1, Math.floor(playerStats.strength * pMult * 0.25 * (1 - eArmorRed)));
-            if (enemyDealsInDraw && enemyInRange)
-              damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * 0.85 * (1 - pArmorRed)));
-            message = '적의 민첩 우세 — 선제 당함!';
-          }
-        } else {
-          // 속도 비슷 → 힘 주사위로 승부
-          const pVal     = playerDice.value;
-          const eVal     = enemyDice.value;
-          const diceDiff = pVal - eVal;
-          if (diceDiff > 2) {
-            // 힘 주사위 플레이어 우세
-            if (playerDealsInDraw && playerInRange)
-              damageDealt = Math.max(1, Math.floor(playerStats.strength * pMult * 0.80 * (1 - eArmorRed)));
-            if (enemyDealsInDraw && enemyInRange)
-              damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * 0.20 * (1 - pArmorRed)));
-            message = '힘 주사위 우세 — 교전 승리!';
-          } else if (diceDiff < -2) {
-            // 힘 주사위 적 우세
-            if (playerDealsInDraw && playerInRange)
-              damageDealt = Math.max(1, Math.floor(playerStats.strength * pMult * 0.20 * (1 - eArmorRed)));
-            if (enemyDealsInDraw && enemyInRange)
-              damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * 0.80 * (1 - pArmorRed)));
-            message = '힘 주사위 열세 — 교전 패배!';
-          } else {
-            // 팽팽한 교전
-            if (playerDealsInDraw && playerInRange)
-              damageDealt = Math.max(1, Math.floor(playerStats.strength * pMult * 0.50 * (1 - eArmorRed)));
-            if (enemyDealsInDraw && enemyInRange)
-              damageTaken = Math.max(1, Math.floor(enemyStats.strength * eMult * 0.50 * (1 - pArmorRed)));
-            message = '팽팽한 교전 — 서로 피해';
-          }
-        }
-
-        if (quality === 'perfect') {
-          if (damageDealt > 0) damageDealt = Math.floor(damageDealt * 1.3);
-          if (damageTaken  > 0) damageTaken  = Math.floor(damageTaken  * 0.7);
-        }
+  // ── 플레이어 공격 피해 ───────────────────────────────────────
+  if (playerAttacks && playerInRange && (isThrowingItem ? itemCanHit : true) && !rangedDodged) {
+    if (playerMain === '마법 사용') {
+      // 마법: 성공 시 무조건 피격 — 속도/힘싸움 배율 무시
+      if (magicMult > 0) {
+        const sp = Math.floor(playerStats.strength * 0.7 + (player.stats.elements.fire + player.stats.elements.dark) * 0.3);
+        damageDealt = Math.max(1, Math.floor(sp * magicMult * pDistMult * (1 - eArmorRed)));
       }
-
-      if (damageDealt === 0 && damageTaken === 0) {
-        message = '서로 위치를 조정했다';
-      }
-      break;
+    } else if (playerSub === '단검 던지기') {
+      damageDealt = Math.max(1, Math.floor(playerStats.strength * 0.9 * pFinalMult * (1 - eArmorRed)));
+    } else if (playerSub === '강화 단검') {
+      damageDealt = Math.max(1, Math.floor(playerStats.strength * 1.2 * pFinalMult * (1 - eArmorRed)));
+    } else if (playerSub === '폭발 물약') {
+      damageDealt = Math.max(1, Math.floor(32 * pFinalMult));
+    } else {
+      damageDealt = Math.max(1, Math.floor(playerStats.strength * pFinalMult * (1 - eArmorRed)));
     }
   }
 
-  // Out-of-range override: attacking out of range always misses completely
-  if (playerMain === '공격' && !playerInRange) {
+  // ── 적 공격 피해 ─────────────────────────────────────────────
+  if (enemyAttacks && enemyInRange) {
+    damageTaken = Math.max(1, Math.floor(enemyStats.strength * eFinalMult * (1 - pArmorRed)));
+  }
+
+  // ── 방어 행동 ────────────────────────────────────────────────
+  // 힘싸움 결과가 방어 성패를 결정
+  if (playerMain === '방어') {
     damageDealt = 0;
-    message = '⚠ 사정거리 밖! 공격이 완전히 빗나갔다';
-  }
-  if (intent.mainAction === '공격' && !enemyInRange) {
-    damageTaken = 0;
-    if (!message || message === '교전 — 서로 피해') {
-      message = '적의 공격이 사정거리 밖 — 빗나갔다';
+    if (enemyAttacks && enemyInRange) {
+      if (strengthContest?.winner === 'player') {
+        const margin = (strengthContest.playerTotal - strengthContest.enemyTotal);
+        if (margin >= 4) {
+          damageTaken = 0;
+          damageDealt = Math.max(1, Math.floor(playerStats.strength * 0.6 * pFinalMult * (1 - eArmorRed)));
+          message = `힘싸움 압승! 완벽 차단 + 반격`;
+        } else {
+          damageTaken = Math.max(1, Math.floor(enemyStats.strength * eFinalMult * 0.20 * (1 - pArmorRed)));
+          message = `힘싸움 승리 — 대부분 막음`;
+        }
+      } else if (strengthContest?.winner === 'tie') {
+        damageTaken = Math.max(1, Math.floor(enemyStats.strength * eFinalMult * 0.55 * (1 - pArmorRed)));
+        message = `힘싸움 팽팽 — 절반 막음`;
+      } else {
+        // 힘싸움 패배: 방어를 선택했지만 밀렸음 → 공격받은 것보다 더 아픔 (무방비 틈을 파고듦)
+        damageTaken = Math.max(1, Math.floor(enemyStats.strength * eFinalMult * 1.1 * (1 - pArmorRed)));
+        message = `힘싸움 패배 — 방어 역이용당함`;
+      }
     }
+  }
+
+  // ── 이동 행동 ────────────────────────────────────────────────
+  if (playerMain === '이동') {
+    damageDealt = 0;
+    // 속도 결과에 따라 피해 결정 (eFinalMult에 이미 반영됨)
+    if (damageTaken > 0) damageTaken = Math.max(1, Math.floor(enemyStats.strength * eFinalMult * (1 - pArmorRed)));
+    message = speedContest.winner === 'player' ? '속도 우위 — 회피 성공!' :
+              speedContest.winner === 'enemy'   ? '속도 열세 — 피격!' : '이동';
+  }
+
+  // ── 아이템 사용 (투척 외) ────────────────────────────────────
+  if (playerMain === '아이템 사용' && !isThrowingItem) {
+    damageDealt = 0;
+  }
+
+  // ── 사정거리 밖 / 원거리 회피 ───────────────────────────────
+  if (playerMain === '공격' && !playerInRange) {
+    damageDealt = 0; message = '⚠ 사정거리 밖! 공격 빗나감';
+  }
+  if (isThrowingItem && !itemCanHit) {
+    damageDealt = 0; message = '⚠ 투척 사정거리 밖';
+  }
+  if (rangedDodged) {
+    damageDealt = 0; message = '속도 우위로 투척 회피!';
+  }
+  if (intent.mainAction === '공격' && !enemyInRange) damageTaken = 0;
+
+  // ── 메시지 생성 ──────────────────────────────────────────────
+  if (!message) {
+    const spdLabel = speedContest.winner === 'player' ? '선제' : speedContest.winner === 'enemy' ? '후공' : '';
+    const strLabel = strengthContest
+      ? (strengthContest.winner === 'player' ? '힘싸움 승' : strengthContest.winner === 'enemy' ? '힘싸움 패' : '힘싸움 팽팽')
+      : '';
+    const magLabel = magicRoll
+      ? (magicRoll.success ? (magicRoll.total >= 10 ? '마법 강화 성공' : '마법 성공') : '마법 실패!')
+      : '';
+    const parts = [spdLabel, strLabel, magLabel].filter(Boolean);
+    if (damageDealt > 0 && damageTaken > 0) message = parts.join(' / ') || '교전';
+    else if (damageDealt > 0) message = parts.join(' / ') || '공격 적중';
+    else if (damageTaken > 0) message = parts.join(' / ') || '피격';
+    else message = parts.join(' / ') || '교전 없음';
+  }
+  if (isCritical) message += ' 🔥크리티컬!';
+
+  // ── 동일 칸(distance=0) 강제 교전 ────────────────────────────
+  if (distance === 0) {
+    const pAtk = Math.max(1, Math.floor(playerStats.strength * pFinalMult * (1 - eArmorRed)));
+    const eAtk = Math.max(1, Math.floor(enemyStats.strength * eFinalMult * (1 - pArmorRed)));
+    damageDealt = pAtk; damageTaken = eAtk;
+    message = '⚔ 밀착 교전!';
   }
 
   const { playerPos: newPlayerPos, enemyPos: newEnemyPos } =
     calcNewPositions(playerSub, intent.subAction, playerPos, enemyPos);
-  const newDistance = newEnemyPos - newPlayerPos;
+  let finalPlayerPos = newPlayerPos;
+  let finalEnemyPos  = newEnemyPos;
+
+  // ── 동일 칸 패자 밀려남 ──────────────────────────────────────
+  if (distance === 0 && finalPlayerPos === finalEnemyPos) {
+    if (damageDealt >= damageTaken) {
+      finalEnemyPos = Math.min(5, finalEnemyPos + 1);
+      message += ' — 적이 밀려났다!';
+    } else {
+      finalPlayerPos = Math.max(1, finalPlayerPos - 1);
+      message += ' — 플레이어가 밀려났다!';
+    }
+  }
+  const newDistance = finalEnemyPos - finalPlayerPos;
 
   // ── 행(Y축) 이동 및 miss 판정 ────────────────────────────────
   const newPlayerRow = calcNewRow(playerSub, playerRow);
   const newEnemyRow  = calcNewRow(intent.subAction, enemyRow);
-
-  // 행 이동은 동시에 발생 → 이동 후 위치(newRow)로 miss 판정
-  // 공격은 같은 행에만 명중 (마법·아이템은 행 무관)
   const playerRowMiss = !isAttackHitByRow(playerMain, newPlayerRow, newEnemyRow);
   const enemyRowMiss  = !isAttackHitByRow(intent.mainAction, newEnemyRow, newPlayerRow);
 
   if (playerRowMiss && damageDealt > 0) {
-    damageDealt = 0;
-    message = '행 이동으로 공격이 빗나갔다!';
+    damageDealt = 0; message = '행 이동으로 공격이 빗나갔다!';
   }
   if (enemyRowMiss && damageTaken > 0) {
     damageTaken = 0;
     message += message ? ' (행 이동으로 회피!)' : '행 이동으로 회피!';
   }
 
+  const base = { quality, baseOutcome: 'draw', speedContest, strengthContest, magicRoll,
+    isCritical, newDistance, newPlayerPos: finalPlayerPos, newEnemyPos: finalEnemyPos,
+    newPlayerRow, newEnemyRow, playerRowMiss, enemyRowMiss };
+
   if (playerMain === '아이템 사용' && playerSub === '치유 물약') {
-    return {
-      quality, baseOutcome: playerOutcome,
-      playerDice, enemyDice,
-      damageTaken, damageDealt,
-      healAmount: 25,
-      isCritical, message: '치유 물약으로 회복',
-      newDistance, newPlayerPos, newEnemyPos,
-      newPlayerRow, newEnemyRow, playerRowMiss, enemyRowMiss,
-    };
+    return { ...base, damageTaken, damageDealt, healAmount: 25, message: '치유 물약으로 회복' };
   }
   if (playerMain === '아이템 사용' && playerSub === '대형 치유 물약') {
-    return {
-      quality, baseOutcome: playerOutcome,
-      playerDice, enemyDice,
-      damageTaken, damageDealt,
-      healAmount: 50,
-      isCritical, message: '대형 치유 물약으로 대량 회복!',
-      newDistance, newPlayerPos, newEnemyPos,
-      newPlayerRow, newEnemyRow, playerRowMiss, enemyRowMiss,
-    };
+    return { ...base, damageTaken, damageDealt, healAmount: 50, message: '대형 치유 물약으로 대량 회복!' };
   }
-
-  return {
-    quality, baseOutcome: playerOutcome,
-    playerDice, enemyDice,
-    damageTaken, damageDealt, isCritical, message,
-    newDistance, newPlayerPos, newEnemyPos,
-    newPlayerRow, newEnemyRow, playerRowMiss, enemyRowMiss,
-  };
+  return { ...base, damageTaken, damageDealt, message };
 }
 
 // ── Intent generation ────────────────────────────────────────
@@ -1112,7 +1055,7 @@ export function generateEnemyIntent(
   } else if (mainAction === '방어' && ctx?.playerLastSub) {
     // 플레이어 마지막 서브의 카운터를 방어 서브로 사용
     const idealCounter = PERFECT_COUNTER[ctx.playerLastSub] as SubAction | undefined;
-    const defendSubs: SubAction[] = ['정면 막기', '올려막기', '흘려막기'];
+    const defendSubs: SubAction[] = ['세로 막기', '올려막기', '가로 막기'];
     subAction = (idealCounter && defendSubs.includes(idealCounter))
       ? idealCounter
       : subs[Math.floor(Math.random() * subs.length)];

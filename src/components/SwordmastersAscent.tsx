@@ -3,9 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ActionType, SubAction, Character, FloatingText, GamePhase,
-  Equipment, Item, Title, MagicSpell, CombatStep, MatchQuality, EnemyIntent, TurnResult, DiceResult,
+  Equipment, Item, Title, MagicSpell, CombatStep, MatchQuality, EnemyIntent, TurnResult, DiceContest, MagicDiceRoll,
   FloorGhosts,
-  SUB_ACTIONS, SUB_ACTION_INFO, PERFECT_COUNTER,
+  SUB_ACTIONS, SUB_ACTION_INFO, PERFECT_COUNTER, MAGIC_SPELL_POOL, getDiceCount,
   generateEnemyIntent, resolveTurn, generateEnemy, createPlayer,
   getRewardEquipment, ITEM_REWARD_POOL, generateCombatTitles,
   TITLES_DATA, DEFAULT_ACTION_WEIGHTS, DICE_FACE,
@@ -275,21 +275,51 @@ function BattleGrid({
                 style={{ width:`${Math.max(0,(player.mp/player.maxMp)*100)}%` }} />
             </div>
             {/* 스테미너 */}
-            <div className={`h-1.5 bg-black/50 rounded-full overflow-hidden border border-gray-700/30 mb-1.5 ${
-              player.stamina/player.maxStamina < 0.3 ? 'ring-1 ring-red-700/50' : ''
-            }`}>
-              <div className={`h-full rounded-full transition-all duration-700 ${
-                player.stamina/player.maxStamina > 0.55 ? 'bg-gradient-to-r from-yellow-700 to-yellow-400'
-                : player.stamina/player.maxStamina > 0.25 ? 'bg-gradient-to-r from-orange-700 to-orange-500'
-                : 'bg-gradient-to-r from-red-800 to-red-600'
-              }`} style={{ width:`${Math.max(0,(player.stamina/player.maxStamina)*100)}%` }} />
-            </div>
+            {(() => {
+              const stamPct = player.stamina / player.maxStamina;
+              const stamLow = stamPct < 0.3;
+              const stamCrit = stamPct < 0.15;
+              return (
+                <>
+                  <div className={`h-1.5 bg-black/50 rounded-full overflow-hidden border mb-1.5 ${
+                    stamCrit ? 'border-red-500/70 ring-1 ring-red-500/50 animate-pulse' :
+                    stamLow  ? 'border-red-700/50 ring-1 ring-red-700/40' : 'border-gray-700/30'
+                  }`}>
+                    <div className={`h-full rounded-full transition-all duration-700 ${
+                      stamPct > 0.55 ? 'bg-gradient-to-r from-yellow-700 to-yellow-400'
+                      : stamPct > 0.25 ? 'bg-gradient-to-r from-orange-700 to-orange-500'
+                      : 'bg-gradient-to-r from-red-800 to-red-600'
+                    }`} style={{ width:`${Math.max(0, stamPct*100)}%` }} />
+                  </div>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {/* 능력치: 스테미나로 감소된 경우 원래값도 표시 */}
+                    {(() => {
+                      const baseStr = player.stats.strength;
+                      const baseAgi = player.stats.agility;
+                      const effStr  = playerStats.strength;
+                      const effAgi  = playerStats.agility;
+                      const strPenalty = baseStr - effStr;
+                      const agiPenalty = baseAgi - effAgi;
+                      return (
+                        <>
+                          <span className="text-[9px] text-gray-400">
+                            💪<b className={strPenalty > 0 ? 'text-red-400' : 'text-gray-200'}>{effStr}</b>
+                            {strPenalty > 0 && <span className="text-red-700 ml-0.5">▼{strPenalty}</span>}
+                          </span>
+                          <span className="text-[9px] text-gray-400">
+                            👣<b className={agiPenalty > 0 ? 'text-red-400' : 'text-gray-200'}>{effAgi}</b>
+                            {agiPenalty > 0 && <span className="text-red-700 ml-0.5">▼{agiPenalty}</span>}
+                          </span>
+                        </>
+                      );
+                    })()}
+                    {stamCrit && <span className="text-[8px] text-red-400 font-black animate-pulse">⚡위험!</span>}
+                    {stamLow && !stamCrit && <span className="text-[8px] text-orange-500 font-bold">⚡부족</span>}
+                  </div>
+                </>
+              );
+            })()}
             <div className="flex gap-1.5 flex-wrap">
-              <span className="text-[9px] text-gray-400">💪<b className="text-gray-200">{playerStats.strength}</b></span>
-              <span className="text-[9px] text-gray-400">👣<b className="text-gray-200">{playerStats.agility}</b></span>
-              {player.stamina/player.maxStamina < 0.3 && (
-                <span className="text-[8px] text-red-500 font-bold">⚡부족!</span>
-              )}
               {player.condition && (
                 <span className={`text-[8px] font-bold px-1 rounded-full ${CONDITION_COLORS[player.condition]}`}
                   style={{ background:'rgba(0,0,0,0.45)' }}>
@@ -467,9 +497,20 @@ function AnimatedDie({
   isKept: boolean; isSumMode: boolean;
 }) {
   const [display, setDisplay] = useState(finalValue);
+  const [justSettled, setJustSettled] = useState(false);
+  const prevRolling = useRef(rolling);
 
   useEffect(() => {
-    if (!rolling) { setDisplay(finalValue); return; }
+    if (!rolling) {
+      setDisplay(finalValue);
+      if (prevRolling.current) {
+        setJustSettled(true);
+        setTimeout(() => setJustSettled(false), 500);
+      }
+      prevRolling.current = false;
+      return;
+    }
+    prevRolling.current = true;
     let elapsed = 0;
     const iv = setInterval(() => {
       setDisplay(Math.floor(Math.random() * 6) + 1);
@@ -482,57 +523,94 @@ function AnimatedDie({
     return () => clearInterval(iv);
   }, [rolling, finalValue, delay]);
 
+  const isHigh = finalValue >= 5;
+  const isMid  = finalValue >= 3 && finalValue < 5;
   const glowClass = isSumMode && finalValue >= 4
-    ? 'text-yellow-300 drop-shadow-[0_0_10px_rgba(250,204,21,0.9)] scale-125'
+    ? 'text-yellow-300 drop-shadow-[0_0_12px_rgba(250,204,21,0.95)]'
     : isKept && !isSumMode
-    ? 'text-yellow-400 drop-shadow-[0_0_8px_rgba(250,204,21,0.8)] scale-110'
-    : 'text-gray-500 scale-90 opacity-60';
+    ? isHigh ? 'text-yellow-300 drop-shadow-[0_0_10px_rgba(250,204,21,0.85)]'
+    : isMid  ? 'text-orange-300 drop-shadow-[0_0_6px_rgba(251,146,60,0.6)]'
+    :          'text-red-400 drop-shadow-[0_0_4px_rgba(248,113,113,0.5)]'
+    : 'text-gray-600 opacity-50';
 
   return (
-    <span className={`text-3xl transition-all duration-300 inline-block ${glowClass}`}>
+    <span className={`text-6xl inline-block ${glowClass} ${justSettled ? 'animate-dice-settle' : 'transition-all duration-200'}`}
+      style={justSettled ? { animationDelay: `${delay * 0.1}ms` } : undefined}>
       {DICE_FACE[display] ?? '⚀'}
     </span>
   );
 }
 
-function DiceRow({
-  dr, rolling, label, labelColor,
+// 대결 주사위 한 줄 (양측 나란히 표시)
+function ContestRow({
+  contest, rolling, playerLabel, enemyLabel, title, delay,
 }: {
-  dr: DiceResult; rolling: boolean;
-  label: string; labelColor: string;
+  contest: DiceContest; rolling: boolean;
+  playerLabel: string; enemyLabel: string;
+  title: string; delay: number;
 }) {
-  const isSumMode = dr.mode === 'sum';
+  const { winner, playerRolls, enemyRolls, playerTotal, enemyTotal } = contest;
+  const pWin = winner === 'player';
+  const eWin = winner === 'enemy';
   return (
-    <div className="bg-gray-950 rounded-lg p-2 border border-gray-800">
-      <div className="flex items-center justify-between mb-1">
-        <span className={`text-xs font-bold ${labelColor}`}>{label} ×{dr.diceCount}</span>
-        {isSumMode ? (
-          <span className="text-[10px] bg-yellow-800/60 text-yellow-300 px-1.5 rounded font-bold">
-            🔥 합산 크리티컬
-          </span>
-        ) : (
-          <span className="text-[10px] text-gray-500">최고값 사용</span>
-        )}
+    <div className={`rounded-xl p-3 border ${pWin ? 'border-blue-700/60 bg-blue-950/30' : eWin ? 'border-red-700/60 bg-red-950/30' : 'border-gray-700/40 bg-gray-950/60'}`}>
+      <div className="text-center text-xs text-gray-400 font-bold mb-2">{title}</div>
+      <div className="flex items-center justify-between gap-3">
+        {/* 플레이어 주사위 */}
+        <div className="flex-1 text-center">
+          <div className={`text-[11px] mb-1.5 font-bold ${pWin ? 'text-blue-300' : 'text-gray-500'}`}>{playerLabel}</div>
+          <div className="flex gap-1.5 flex-wrap justify-center">
+            {playerRolls.map((v: number, i: number) => (
+              <AnimatedDie key={i} finalValue={v} rolling={rolling} delay={delay + i * 100}
+                isKept={v === Math.max(...playerRolls)} isSumMode={false} />
+            ))}
+          </div>
+          <div className={`text-lg mt-1 font-black ${pWin ? 'text-blue-200' : 'text-gray-500'}`}>{playerTotal}</div>
+        </div>
+        {/* VS */}
+        <div className="text-center shrink-0">
+          {rolling
+            ? <span className="text-gray-600 text-xl font-black">VS</span>
+            : <span className={`text-xl font-black ${pWin ? 'text-blue-300' : eWin ? 'text-red-400' : 'text-gray-500'}`}>
+                {pWin ? '◀ 승' : eWin ? '승 ▶' : '동점'}
+              </span>
+          }
+        </div>
+        {/* 적 주사위 */}
+        <div className="flex-1 text-center">
+          <div className={`text-[11px] mb-1.5 font-bold ${eWin ? 'text-red-300' : 'text-gray-500'}`}>{enemyLabel}</div>
+          <div className="flex gap-1.5 flex-wrap justify-center">
+            {enemyRolls.map((v: number, i: number) => (
+              <AnimatedDie key={i} finalValue={v} rolling={rolling} delay={delay + i * 100 + 50}
+                isKept={v === Math.max(...enemyRolls)} isSumMode={false} />
+            ))}
+          </div>
+          <div className={`text-lg mt-1 font-black ${eWin ? 'text-red-200' : 'text-gray-500'}`}>{enemyTotal}</div>
+        </div>
       </div>
-      <div className="flex gap-1.5 justify-center flex-wrap">
-        {dr.rolls.map((v, i) => (
-          <AnimatedDie
-            key={i}
-            finalValue={v}
-            rolling={rolling}
-            delay={i * 120}
-            isKept={v === dr.kept}
-            isSumMode={isSumMode}
-          />
+    </div>
+  );
+}
+
+function MagicRollRow({ magicRoll, rolling }: { magicRoll: MagicDiceRoll; rolling: boolean }) {
+  const { rolls, total, threshold, success } = magicRoll;
+  return (
+    <div className={`bg-gray-950 rounded-lg p-2 border ${success ? 'border-purple-700/60' : 'border-gray-800'}`}>
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="text-[11px] text-gray-400 font-bold">마법 성공 주사위</span>
+        <span className={`text-[11px] font-bold ${success ? (total >= 10 ? 'text-yellow-300' : 'text-purple-300') : 'text-red-400'}`}>
+          {success ? (total >= 10 ? '강화 성공!' : '성공') : `실패 (필요: ${threshold}+)`}
+        </span>
+      </div>
+      <div className="flex gap-3 justify-center">
+        {rolls.map((v: number, i: number) => (
+          <AnimatedDie key={i} finalValue={v} rolling={rolling} delay={i * 120}
+            isKept={success} isSumMode={success && total >= 10} />
         ))}
       </div>
-      <div className="text-center text-xs mt-1">
-        {isSumMode ? (
-          <span className="text-yellow-400 font-bold">합계: {dr.sum}</span>
-        ) : (
-          <span className="text-yellow-400 font-bold">최고: {dr.kept}</span>
-        )}
-        <span className="text-gray-600 ml-1">({dr.diceCount}개 중)</span>
+      <div className="text-center text-sm mt-2">
+        <span className="text-yellow-400 font-black text-lg">{total}</span>
+        <span className="text-gray-500 ml-1 text-xs">({threshold}+ 성공)</span>
       </div>
     </div>
   );
@@ -769,31 +847,46 @@ function DicePanel({ result, rolling, playerName, enemyName }: {
 }) {
   const qualityColor = QUALITY_COLOR[result.quality];
   const qualityLabel = QUALITY_LABEL[result.quality];
+  const isPerfect  = result.quality === 'perfect';
+  const isMiss     = result.quality === 'miss';
+  const isCrit     = result.isCritical;
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
+      {rolling && (
+        <div className="text-center text-yellow-400 font-bold animate-pulse py-1">🎲 주사위 굴리는 중...</div>
+      )}
       {!rolling && (
-        <div className={`text-center font-bold text-lg ${qualityColor}`}>
-          {result.quality === 'perfect' ? '🌟 ' : result.quality === 'partial' ? '✅ ' : '❌ '}
+        <div className={`text-center font-black text-xl py-1.5 rounded-lg
+          ${isPerfect ? 'animate-quality-perfect bg-yellow-950/60 border border-yellow-600/50 text-yellow-300' :
+            isMiss    ? 'animate-quality-miss bg-red-950/60 border border-red-700/50 text-red-400' :
+            isCrit    ? 'animate-quality-perfect bg-orange-950/60 border border-orange-600/50 text-orange-300' :
+                        `${qualityColor} bg-gray-900/60`}`}>
+          {isPerfect ? '🌟 ' : isCrit ? '🔥 ' : result.quality === 'partial' ? '✅ ' : '❌ '}
           {qualityLabel}
-          <span className="text-gray-400 text-xs ml-2 font-normal">{result.message}</span>
+          {isCrit && <span className="ml-1 text-sm">크리티컬!</span>}
         </div>
       )}
-      {rolling && (
-        <div className="text-center text-yellow-400 font-bold animate-pulse">🎲 주사위 굴리는 중...</div>
+      {/* 속도 결정 */}
+      <ContestRow contest={result.speedContest} rolling={rolling}
+        playerLabel={playerName} enemyLabel={enemyName}
+        title="⚡ 속도 결정" delay={0} />
+      {/* 힘싸움 (공격·방어 시) */}
+      {result.strengthContest && (
+        <ContestRow contest={result.strengthContest} rolling={rolling}
+          playerLabel={playerName} enemyLabel={enemyName}
+          title="⚔ 힘싸움" delay={200} />
       )}
-      <div className="grid grid-cols-2 gap-3">
-        <DiceRow dr={result.playerDice} rolling={rolling} label={playerName} labelColor="text-blue-400" />
-        <DiceRow dr={result.enemyDice}  rolling={rolling} label={enemyName}  labelColor="text-red-400" />
-      </div>
+      {/* 마법 성공 판정 */}
+      {result.magicRoll && (
+        <MagicRollRow magicRoll={result.magicRoll} rolling={rolling} />
+      )}
       {!rolling && (
-        <div className="flex justify-center gap-6 text-sm">
+        <div className="flex justify-center gap-6 text-sm pb-1">
           {result.damageDealt > 0 && (
             <span>
               <span className="text-gray-400">적 피해: </span>
-              <span className={`font-bold ${result.isCritical && result.playerDice.mode === 'sum' ? 'text-yellow-300' : 'text-red-400'}`}>
-                {result.damageDealt}{result.isCritical && result.playerDice.mode === 'sum' ? ' 🔥합산!' : ''}
-              </span>
+              <span className={`font-bold ${isCrit ? 'text-yellow-300' : 'text-red-400'}`}>{result.damageDealt}</span>
             </span>
           )}
           {result.damageTaken > 0 && (
@@ -1486,9 +1579,31 @@ export default function SwordmastersAscent() {
   const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
   const [diceRolling, setDiceRolling] = useState(false);
   const [hitFlash, setHitFlash] = useState<'player' | 'enemy' | 'both' | null>(null);
+  const [diceWinnerFlash, setDiceWinnerFlash] = useState<'player' | 'enemy' | null>(null);
 
   const [stats, setStats] = useState({ floorsCleared:0, bossesKilled:0, perfectBlocks:0 });
   const [pendingMagicAbsorb, setPendingMagicAbsorb] = useState<MagicSpell | null>(null);
+  const [resultFlash, setResultFlash] = useState<'perfect' | 'critical' | 'miss' | null>(null);
+  const [playerMoveDir, setPlayerMoveDir] = useState<'forward' | 'back' | null>(null);
+  const [enemyMoveDir,  setEnemyMoveDir]  = useState<'forward' | 'back' | null>(null);
+  const prevPlayerPos = useRef(playerPos);
+  const prevEnemyPos  = useRef(enemyPos);
+  useEffect(() => {
+    if (prevPlayerPos.current !== playerPos) {
+      const dir = playerPos > prevPlayerPos.current ? 'forward' : 'back';
+      setPlayerMoveDir(dir);
+      setTimeout(() => setPlayerMoveDir(null), 500);
+      prevPlayerPos.current = playerPos;
+    }
+  }, [playerPos]);
+  useEffect(() => {
+    if (prevEnemyPos.current !== enemyPos) {
+      const dir = enemyPos < prevEnemyPos.current ? 'forward' : 'back';
+      setEnemyMoveDir(dir);
+      setTimeout(() => setEnemyMoveDir(null), 500);
+      prevEnemyPos.current = enemyPos;
+    }
+  }, [enemyPos]);
   const addLog = useCallback((msg: string) => setLogs(p => [...p.slice(-60), msg]), []);
 
   const showFloat = useCallback((text: string, type: FloatingText['type'], side: FloatingText['side']) => {
@@ -1506,7 +1621,9 @@ export default function SwordmastersAscent() {
       ...saved.player,
       stamina: saved.player.stamina ?? saved.player.maxStamina ?? 40,
       maxStamina: saved.player.maxStamina ?? 40,
-      magicSlots: Array.isArray(saved.player.magicSlots) ? saved.player.magicSlots : [],
+      magicSlots: Array.isArray(saved.player.magicSlots) && saved.player.magicSlots.length > 0
+        ? saved.player.magicSlots
+        : [MAGIC_SPELL_POOL[Math.floor(Math.random() * MAGIC_SPELL_POOL.length)]],
     };
     const normalizedEnemy = {
       ...saved.enemy,
@@ -1612,7 +1729,7 @@ export default function SwordmastersAscent() {
     const t = setTimeout(() => {
       if (enemy.hp > 0 && player && player.hp > 0)
         spawnIntent(enemy, playerRow, enemyRow, playerPos, enemyPos, player.hp, player.maxHp);
-    }, 2500);
+    }, 2000);
     return () => clearTimeout(t);
   }, [combatStep, turnResult, enemy, player, playerRow, enemyRow, playerPos, enemyPos, spawnIntent]);
 
@@ -1648,7 +1765,7 @@ export default function SwordmastersAscent() {
     const ghosts = loadFloorGhosts();
     const e = generateEnemy(nf, legacy, ghosts);
     const newCond = rollCondition();
-    const pWithCond = { ...p, condition: newCond };
+    const pWithCond = { ...p, condition: newCond, hp: p.maxHp };
     setFloor(nf); setEnemy(e); setPlayer(pWithCond); setPhase('battle');
     setPlayerPos(1); setEnemyPos(4); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
     const condMsg = newCond !== 'normal' ? ` (컨디션: ${CONDITION_LABELS[newCond]})` : '';
@@ -1674,8 +1791,42 @@ export default function SwordmastersAscent() {
     setDiceRolling(true);
 
     setTimeout(() => {
+      // ── Phase 1 (t=1900ms): 주사위 완전 종료 + 상태 전체 업데이트 ──
       setDiceRolling(false);
       setCombatStep('result');
+
+      // 위치 업데이트
+      setPlayerPos(result.newPlayerPos);
+      setEnemyPos(result.newEnemyPos);
+      setPlayerRow(result.newPlayerRow);
+      setEnemyRow(result.newEnemyRow);
+      if (result.newDistance !== distance) {
+        const moved = result.newDistance < distance ? '거리가 좁혀졌다.' : '거리가 벌어졌다.';
+        addLog(`  ${moved}`);
+      }
+      if (result.newPlayerRow !== playerRow) addLog(`  발을 옆으로 옮겨 행을 바꿨다.`);
+      if (result.newEnemyRow  !== enemyRow)  addLog(`  적이 옆으로 이동했다.`);
+
+      // 서술형 메인 로그
+      addLog(`  ${result.message}`);
+
+      // 주사위 결과 (간략)
+      const spd = result.speedContest;
+      addLog(`  속도 [${spd.playerRolls.join(' ')}]=${spd.playerTotal} vs [${spd.enemyRolls.join(' ')}]=${spd.enemyTotal} → ${spd.winner === 'player' ? '선제' : spd.winner === 'enemy' ? '후공' : '동점'}`);
+      if (result.strengthContest) {
+        const str = result.strengthContest;
+        addLog(`  힘싸움 [${str.playerRolls.join(' ')}]=${str.playerTotal} vs [${str.enemyRolls.join(' ')}]=${str.enemyTotal} → ${str.winner === 'player' ? '승' : str.winner === 'enemy' ? '패' : '팽팽'}`);
+      }
+      if (result.magicRoll) {
+        const mg = result.magicRoll;
+        addLog(`  마법 주사위 [${mg.rolls.join(' ')}]=${mg.total} → ${mg.success ? '성공' : '실패'}`);
+      }
+
+      // 속도 승자 플래시 (캐릭터 근처, 즉시)
+      if (spd.winner !== 'tie') {
+        setDiceWinnerFlash(spd.winner);
+        setTimeout(() => setDiceWinnerFlash(null), 1400);
+      }
 
       // Apply damage + healing
       let newPlayerHp = Math.min(player.maxHp, player.hp - result.damageTaken + (result.healAmount ?? 0));
@@ -1691,58 +1842,21 @@ export default function SwordmastersAscent() {
       } else if (nextCooldown > 0) {
         nextCooldown = Math.max(0, nextCooldown - 1);
       }
+      setMagicCooldown(nextCooldown);
 
-      // 위치 업데이트
-      setPlayerPos(result.newPlayerPos);
-      setEnemyPos(result.newEnemyPos);
-      setPlayerRow(result.newPlayerRow);
-      setEnemyRow(result.newEnemyRow);
-      // 행/위치 이동 서술
-      if (result.newDistance !== distance) {
-        const moved = result.newDistance < distance ? '거리가 좁혀졌다.' : '거리가 벌어졌다.';
-        addLog(`  ${moved}`);
-      }
-      if (result.newPlayerRow !== playerRow) addLog(`  발을 옆으로 옮겨 행을 바꿨다.`);
-      if (result.newEnemyRow  !== enemyRow)  addLog(`  적이 옆으로 이동했다.`);
-      if (result.playerRowMiss) { showFloat('빗나감!', 'miss', 'enemy'); addLog(`  행 이동으로 공격이 허공을 갈랐다.`); }
-      if (result.enemyRowMiss)  { showFloat('회피!',   'miss', 'player'); addLog(`  행 이동으로 적의 공격을 피했다.`); }
-
-      // 서술형 메인 로그
-      addLog(`  ${result.message}`);
-
-      // 주사위 결과 (간략)
-      const pDiceRolls = result.playerDice.rolls.join(' ');
-      const eDiceRolls = result.enemyDice.rolls.join(' ');
-      const pCrit = result.playerDice.mode === 'sum' ? ' — 전체 크리티컬!' : '';
-      const eCrit = result.enemyDice.mode === 'sum' ? ' — 전체 크리티컬!' : '';
-      addLog(`  주사위 [${pDiceRolls}]${pCrit}  /  적 [${eDiceRolls}]${eCrit}`);
-
-      // FloatingText — 수치는 여기서만
-      const playerStamDelta = getStaminaDelta(playerMain);
-      const enemyStamDelta = getStaminaDelta(intent.mainAction);
-      if (playerStamDelta > 0) showFloat(`⚡+${playerStamDelta}`, 'info', 'player');
-
-      if (result.damageDealt > 0) showFloat(
-        result.isCritical ? `CRIT! ${result.damageDealt}` : `${result.damageDealt}`,
-        result.isCritical ? 'critical' : 'damage', 'enemy',
-      );
-      if (result.damageTaken > 0) showFloat(`-${result.damageTaken}`, 'damage', 'player');
-
-      // 피격 플래시
-      const flash = result.damageDealt > 0 && result.damageTaken > 0 ? 'both'
-        : result.damageDealt > 0 ? 'enemy'
-        : result.damageTaken > 0 ? 'player' : null;
-      if (flash) {
-        setHitFlash(flash);
-        setTimeout(() => setHitFlash(null), 350);
-      }
-      if (result.healAmount && result.healAmount > 0) {
-        showFloat(`+${result.healAmount}`, 'heal', 'player');
-        addLog(`  체력이 회복되었다.`);
-      }
-      if (result.damageTaken === 0 && result.damageDealt === 0 && result.quality === 'perfect') {
-        showFloat('완벽 차단!', 'info', 'player');
-      }
+      // 스태미나 계산
+      const playerAttackDoubleLoss =
+        playerMain === '공격' &&
+        result.speedContest?.winner === 'enemy' &&
+        result.strengthContest?.winner === 'enemy';
+      const enemyAttackDoubleLoss =
+        intent.mainAction === '공격' &&
+        result.speedContest?.winner === 'player' &&
+        result.strengthContest?.winner === 'player';
+      const playerStamDelta = playerMain === '방어' && !result.strengthContest
+        ? getStaminaDelta('이동')
+        : getStaminaDelta(playerMain) - (playerAttackDoubleLoss ? 15 : 0);
+      const enemyStamDelta = getStaminaDelta(intent.mainAction) - (enemyAttackDoubleLoss ? 15 : 0);
 
       let newStats = { ...stats };
       if (result.quality === 'perfect' && playerMain === '방어') newStats.perfectBlocks++;
@@ -1770,7 +1884,40 @@ export default function SwordmastersAscent() {
           addLog(`  ${sub}을 사용했다. (남은 ${remaining}개)`)
         }
       }
-      setMagicCooldown(nextCooldown);
+
+      // ── Phase 2 내부 함수: 데미지 연출 (t=2400ms) ──────────────
+      const showDamageEffects = () => {
+        // 화면 플래시
+        const flashType = result.quality === 'perfect' ? 'perfect'
+          : result.isCritical ? 'critical'
+          : result.quality === 'miss' ? 'miss' : null;
+        if (flashType) {
+          setResultFlash(flashType);
+          setTimeout(() => setResultFlash(null), 900);
+        }
+        // 행 미스 플로팅
+        if (result.playerRowMiss) { showFloat('빗나감!', 'miss', 'enemy'); addLog(`  행 이동으로 공격이 허공을 갈랐다.`); }
+        if (result.enemyRowMiss)  { showFloat('회피!',   'miss', 'player'); addLog(`  행 이동으로 적의 공격을 피했다.`); }
+        // 스태미나 플로팅
+        if (playerStamDelta > 0) showFloat(`⚡+${playerStamDelta}`, 'info', 'player');
+        // 데미지 플로팅 (캐릭터 근처)
+        if (result.damageDealt > 0) showFloat(
+          result.isCritical ? `CRIT! ${result.damageDealt}` : `${result.damageDealt}`,
+          result.isCritical ? 'critical' : 'damage', 'enemy');
+        if (result.damageTaken > 0) showFloat(`-${result.damageTaken}`, 'damage', 'player');
+        // 피격 플래시
+        const flash = result.damageDealt > 0 && result.damageTaken > 0 ? 'both'
+          : result.damageDealt > 0 ? 'enemy'
+          : result.damageTaken > 0 ? 'player' : null;
+        if (flash) { setHitFlash(flash); setTimeout(() => setHitFlash(null), 350); }
+        if (result.healAmount && result.healAmount > 0) {
+          showFloat(`+${result.healAmount}`, 'heal', 'player');
+          addLog(`  체력이 회복되었다.`);
+        }
+        if (result.damageTaken === 0 && result.damageDealt === 0 && result.quality === 'perfect') {
+          showFloat('완벽 차단!', 'info', 'player');
+        }
+      };
 
       // Enemy defeated
       if (updatedEnemy.hp <= 0) {
@@ -1815,6 +1962,7 @@ export default function SwordmastersAscent() {
         }
 
         setPlayer(updatedPlayer); setEnemy(updatedEnemy);
+        setTimeout(showDamageEffects, 500);
         setTimeout(() => setPhase('reward'), 1200);
         return;
       }
@@ -1837,6 +1985,7 @@ export default function SwordmastersAscent() {
         addLog('패배');
         setPlayer({ ...updatedPlayer, hp: 0 });
         setEnemy(updatedEnemy);
+        setTimeout(showDamageEffects, 500);
         setTimeout(() => setPhase('gameover'), 1200);
         return;
       }
@@ -1844,7 +1993,9 @@ export default function SwordmastersAscent() {
       setStats(newStats);
       setPlayer(updatedPlayer);
       setEnemy(updatedEnemy);
-    }, 1500); // dice roll duration
+      // ── Phase 2 (t=2400ms): 데미지 연출 — 주사위 결과 확인 후 등장 ──
+      setTimeout(showDamageEffects, 500);
+    }, 1900); // 주사위 전체 완전 종료 대기 (최대 delay=550ms → 1200+550+여유=1900ms)
   }, [player, enemy, intent, playerMain, playerPos, enemyPos, playerRow, enemyRow, distance, stats, floor, magicCooldown, updateHighScore, addLog, showFloat]);
 
   // ════════════════════════════════════════════════════════
@@ -1956,14 +2107,17 @@ export default function SwordmastersAscent() {
         ? (player.magicSlots as SubAction[])
         : playerMain === '아이템 사용' && player.inventory.length > 0
         ? player.inventory.map(it => it.name as SubAction)
+        : playerMain === '공격'
+        ? [...(SUB_ACTIONS[playerMain] ?? []), ...(distance === 0 ? ['뒤로 베기' as SubAction] : [])]
         : (SUB_ACTIONS[playerMain] ?? []) as SubAction[])
     : [];
   const subDisabled = (sub: SubAction): boolean => {
-    if (playerMain !== '이동') return false;
-    if (sub === '후퇴'        && playerPos <= 1) return true;
-    if (sub === '전진 압박'   && distance <= 1)  return true;
-    if (sub === '위로 이동'   && playerRow <= COMBAT_ROW_MIN) return true;
-    if (sub === '아래로 이동' && playerRow >= COMBAT_ROW_MAX) return true;
+    if (sub === '후퇴'        && playerMain === '이동' && playerPos <= 1) return true;
+    if (sub === '전진 압박'   && playerMain === '이동' && distance <= 0)  return true;
+    if (sub === '위로 이동'   && playerMain === '이동' && playerRow <= COMBAT_ROW_MIN) return true;
+    if (sub === '아래로 이동' && playerMain === '이동' && playerRow >= COMBAT_ROW_MAX) return true;
+    // 뒤로 베기는 밀착(distance=0)일 때만 유효
+    if (sub === '뒤로 베기' && distance > 0) return true;
     return false;
   };
   const likelySub = (() => {
@@ -1981,12 +2135,31 @@ export default function SwordmastersAscent() {
   })();
   const perfectSub = PERFECT_COUNTER[likelySub];
 
-  // 원근감: pos1=전경(크게), pos5=원경(작게)
-  // 화면 720px - bottom 152px = 568px 여유 → 최대 555px로 잘림 방지
-  const playerSize = Math.round(555 - (playerPos - 1) * 45); // 555→510→465→420→375
-  const enemySize  = Math.round(555 - (5 - enemyPos) * 45);  // 375→420→465→510→555
-  const playerLeft = (playerPos - 1) * 62;
-  const enemyRight = (5 - enemyPos) * 62;
+  // ── 바닥 원근 그리드 좌표계 ──────────────────────────────────
+  // pos1=앞(카메라 가까움·화면 아래), pos5=뒤(원경·화면 위)
+  // row1=왼쪽, row2=중앙, row3=오른쪽
+  const G_NY = 572, G_FY = 340;        // 근경·원경 Y
+  const G_NL = 0,   G_NR = 1280;       // 근경 좌·우 X
+  const G_FL = 260, G_FR = 1020;       // 원경 좌·우 X
+  const gPt = (td: number, tl: number) => {
+    const nx = G_NL + tl * (G_NR - G_NL);
+    const fx = G_FL + tl * (G_FR - G_FL);
+    return { x: nx + td * (fx - nx), y: G_NY + td * (G_FY - G_NY) };
+  };
+  const pTD = (2 * playerPos - 1) / 10;  // pos1=0.1 … pos5=0.9
+  // Player leans left (-0.12), enemy leans right (+0.12) so they don't overlap at same row
+  const pTL = Math.max(0, Math.min(1, (playerRow - 0.5) / 3 - 0.12));
+  const eTD = (2 * enemyPos  - 1) / 10;
+  const eTL = Math.max(0, Math.min(1, (enemyRow  - 0.5) / 3 + 0.12));
+  const pC  = gPt(pTD, pTL);
+  const eC  = gPt(eTD, eTL);
+  const playerSize   = Math.round(380 - (playerPos - 1) * 40); // pos1=380, pos5=220
+  const enemySize    = Math.round(380 - (enemyPos  - 1) * 40);
+  const playerLeft   = Math.round(pC.x - playerSize  / 2);
+  const playerBottom = Math.round(720  - pC.y);
+  const enemyLeft    = Math.round(eC.x - enemySize   / 2);
+  const enemyBottom  = Math.round(720  - eC.y);
+  const enemyRight   = Math.round(1280 - enemyLeft   - enemySize);
 
   return (
     <div className="w-[1280px] h-[720px] relative overflow-hidden"
@@ -1995,23 +2168,104 @@ export default function SwordmastersAscent() {
       {/* ══════ 배경 이미지 ══════ */}
       <img src="/bg/background.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none" />
 
-      {/* ══════ 캐릭터 스테이지 (상단바 아래 ~ 하단UI 위) ══════ */}
-      {/* 플레이어 — 바닥 앵커, pos1=전경(크게) / pos5=원경(작게+위) */}
+      {/* ══════ 바닥 원근 그리드 ══════ */}
+      {(() => {
+        const sameCell = playerPos === enemyPos && playerRow === enemyRow;
+        // 셀 하이라이트용 사각형 꼭짓점
+        const cellPts = (p: number, r: number) => {
+          const td0 = (p-1)/5, td1 = p/5;
+          const tl0 = (r-1)/3, tl1 = r/3;
+          const a = gPt(td0,tl0), b = gPt(td0,tl1);
+          const c = gPt(td1,tl1), d = gPt(td1,tl0);
+          return `${a.x},${a.y} ${b.x},${b.y} ${c.x},${c.y} ${d.x},${d.y}`;
+        };
+        return (
+          <svg className="absolute pointer-events-none select-none"
+            style={{ left:0, top:0, width:'100%', height:'100%', zIndex:3 }}
+            viewBox="0 0 1280 720">
+
+            {/* 바닥 면 */}
+            <polygon
+              points={`${G_NL},${G_NY} ${G_NR},${G_NY} ${G_FR},${G_FY} ${G_FL},${G_FY}`}
+              fill="rgba(30,50,75,0.10)" />
+
+            {/* 셀 하이라이트 */}
+            <polygon points={cellPts(playerPos, playerRow)}
+              fill={sameCell ? 'rgba(220,150,50,0.15)' : 'rgba(59,130,246,0.12)'} />
+            {!sameCell && (
+              <polygon points={cellPts(enemyPos, enemyRow)}
+                fill="rgba(239,68,68,0.12)" />
+            )}
+
+            {/* 깊이 선 — pos 경계 (앞→뒤 6줄) */}
+            {[0, 0.2, 0.4, 0.6, 0.8, 1.0].map((td, i) => {
+              const l = gPt(td, 0), r = gPt(td, 1);
+              const isEdge = i === 0 || i === 5;
+              return <line key={i}
+                x1={l.x} y1={l.y} x2={r.x} y2={r.y}
+                stroke={`rgba(100,160,220,${isEdge ? 0.35 : 0.22})`}
+                strokeWidth={isEdge ? 1.5 : 1} />;
+            })}
+
+            {/* 레인 선 — row 경계 (좌→우 4줄) */}
+            {[0, 1/3, 2/3, 1].map((tl, i) => {
+              const n = gPt(0, tl), f = gPt(1, tl);
+              return <line key={i}
+                x1={n.x} y1={n.y} x2={f.x} y2={f.y}
+                stroke="rgba(100,160,220,0.25)" strokeWidth={1.5} />;
+            })}
+
+            {/* 포지션 번호 — 근경 왼쪽 */}
+            {[1,2,3,4,5].map(pos => {
+              const pt = gPt((2*pos-1)/10, 0);
+              const isP = pos === playerPos, isE = pos === enemyPos;
+              return <text key={pos} x={pt.x - 18} y={pt.y + 1}
+                fontSize="9" fontWeight="bold"
+                fill={isP && isE ? 'rgba(251,191,36,0.9)'
+                    : isP ? 'rgba(96,165,250,0.85)'
+                    : isE ? 'rgba(248,113,113,0.85)'
+                    : 'rgba(255,255,255,0.25)'}>{pos}</text>;
+            })}
+
+            {/* 행 레이블 — 근경 가장자리 */}
+            {(['상','중','하'] as const).map((lbl, i) => {
+              const pt = gPt(0, (i + 0.5) / 3);
+              return <text key={i} x={pt.x + 4} y={pt.y - 5}
+                fontSize="9" fontWeight="bold"
+                fill="rgba(255,255,255,0.22)">{lbl}</text>;
+            })}
+
+            {/* 밀착 경고 */}
+            {sameCell && (
+              <text x={pC.x} y={pC.y - 16}
+                textAnchor="middle" fontSize="11" fontWeight="bold"
+                fill="rgba(251,191,36,0.9)">⚔ 밀착</text>
+            )}
+          </svg>
+        );
+      })()}
+
+      {/* ══════ 캐릭터 — pos에 따라 깊이(y)·크기 변화 ══════ */}
+      {/* 플레이어: pos1=아래/크게, pos5=위/작게 */}
       <div className="absolute pointer-events-none flex items-end"
         style={{
           left: `${playerLeft}px`,
-          bottom: '152px',
-          transition: 'left 0.4s ease, width 0.4s ease',
+          bottom: `${playerBottom}px`,
+          zIndex: 10 - playerPos,
+          transition: 'left 0.4s cubic-bezier(0.34,1.2,0.64,1), bottom 0.4s cubic-bezier(0.34,1.2,0.64,1)',
+          filter: playerMoveDir === 'forward' ? 'brightness(1.4)' : playerMoveDir === 'back' ? 'brightness(0.8)' : undefined,
         }}>
         <CharImage src="/chars/player.png" fallback="🛡️" size={playerSize}
           glow={pFlash ? 'rgba(239,68,68,0.6)' : 'rgba(96,165,250,0.2)'} flash={pFlash} />
       </div>
-      {/* 적 — 바닥 앵커, pos5=전경(크게) / pos1=원경(작게) */}
+      {/* 적 */}
       <div className="absolute pointer-events-none flex items-end"
         style={{
-          right: `${enemyRight}px`,
-          bottom: '152px',
-          transition: 'right 0.4s ease, width 0.4s ease',
+          left: `${enemyLeft}px`,
+          bottom: `${enemyBottom}px`,
+          zIndex: 10 - enemyPos,
+          transition: 'left 0.4s cubic-bezier(0.34,1.2,0.64,1), bottom 0.4s cubic-bezier(0.34,1.2,0.64,1)',
+          filter: enemyMoveDir === 'forward' ? 'brightness(1.4)' : enemyMoveDir === 'back' ? 'brightness(0.8)' : undefined,
         }}>
         <CharImage src="/enemy/enemy.png" fallback={enemy.isBoss ? '💀' : '⚔️'} size={enemySize}
           glow={eFlash ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.2)'} flash={eFlash} />
@@ -2025,28 +2279,76 @@ export default function SwordmastersAscent() {
       <div className="absolute inset-0 pointer-events-none"
         style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.78) 0%, transparent 20%, transparent 52%, rgba(0,0,0,0.94) 100%)' }} />
 
-      {/* ══════ 플로팅 데미지 ══════ */}
-      {/* 플레이어 피격 — 왼쪽 중앙 */}
-      <div className="absolute pointer-events-none" style={{ left: '8%', top: '28%' }}>
+      {/* ══════ 주사위 패널 — 캐릭터 사이 중앙 오버레이 ══════ */}
+      {(combatStep === 'rolling' || combatStep === 'result') && turnResult && (
+        <div className="absolute pointer-events-none z-30"
+          style={{
+            left: '50%',
+            top: `${Math.round((pC.y + eC.y) / 2 - 20)}px`,
+            transform: 'translateX(-50%)',
+            width: '480px',
+          }}>
+          <div className="rounded-xl p-3 animate-slide-up"
+            style={{ background: 'rgba(5,5,15,0.88)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(4px)' }}>
+            <DicePanel result={turnResult} rolling={diceRolling} playerName={player.name} enemyName={enemy.name} />
+            {combatStep === 'result' && enemy.hp > 0 && player.hp > 0 && (
+              <div className="text-center text-gray-600 text-[10px] pb-1 animate-pulse">다음 턴 대기 중...</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ══════ 결과 화면 플래시 ══════ */}
+      {resultFlash && (
+        <div className={`absolute inset-0 pointer-events-none z-40 ${
+          resultFlash === 'perfect'  ? 'animate-screen-flash-gold' :
+          resultFlash === 'critical' ? 'animate-screen-flash-gold' :
+                                       'animate-screen-flash-red'
+        }`} style={{
+          background: resultFlash === 'miss'
+            ? 'radial-gradient(ellipse at center, rgba(220,38,38,0.35) 0%, transparent 70%)'
+            : 'radial-gradient(ellipse at center, rgba(250,204,21,0.4) 0%, transparent 70%)',
+        }} />
+      )}
+
+      {/* ══════ 주사위 속도 승자 배지 — 캐릭터 중앙 ══════ */}
+      {diceWinnerFlash === 'player' && (
+        <div className="absolute pointer-events-none z-25 animate-winner-pop"
+          style={{ left: `${pC.x}px`, top: `${pC.y - playerSize * 0.6}px`, transform: 'translateX(-50%)' }}>
+          <span className="text-2xl font-black drop-shadow-[0_2px_12px_rgba(0,0,0,1)] text-yellow-300 whitespace-nowrap">⚡ 선제!</span>
+        </div>
+      )}
+      {diceWinnerFlash === 'enemy' && (
+        <div className="absolute pointer-events-none z-25 animate-winner-pop"
+          style={{ left: `${eC.x}px`, top: `${eC.y - enemySize * 0.6}px`, transform: 'translateX(-50%)' }}>
+          <span className="text-2xl font-black drop-shadow-[0_2px_12px_rgba(0,0,0,1)] text-red-300 whitespace-nowrap">⚡ 선제!</span>
+        </div>
+      )}
+
+      {/* ══════ 플로팅 데미지 — 캐릭터 위치 기준 ══════ */}
+      {/* 플레이어 피격 — 캐릭터 상단 */}
+      <div className="absolute pointer-events-none z-20"
+        style={{ left: `${Math.max(10, playerLeft + playerSize * 0.1)}px`, top: `${Math.max(60, pC.y - playerSize)}px` }}>
         {floating.filter(f => f.side === 'player').map((ft, i) => (
           <div key={ft.id} className={`absolute animate-bounce-up font-black drop-shadow-[0_2px_8px_rgba(0,0,0,1)] ${
-            ft.type === 'critical' ? 'text-yellow-300 text-4xl' :
-            ft.type === 'damage'   ? 'text-red-400 text-3xl' :
+            ft.type === 'critical' ? 'text-yellow-300 text-5xl' :
+            ft.type === 'damage'   ? 'text-red-400 text-4xl' :
             ft.type === 'heal'     ? 'text-green-400 text-2xl' :
-            ft.type === 'miss'     ? 'text-gray-400 text-lg italic' :
+            ft.type === 'miss'     ? 'text-gray-400 text-xl italic' :
             'text-blue-300 text-sm'
-          }`} style={{ top: `${i * 44}px` }}>{ft.text}</div>
+          }`} style={{ top: `${i * 54}px` }}>{ft.text}</div>
         ))}
       </div>
-      {/* 적 피격 — 오른쪽 중앙 */}
-      <div className="absolute pointer-events-none" style={{ right: '8%', top: '28%' }}>
+      {/* 적 피격 — 캐릭터 상단 */}
+      <div className="absolute pointer-events-none z-20"
+        style={{ left: `${Math.max(10, enemyLeft + enemySize * 0.1)}px`, top: `${Math.max(60, eC.y - enemySize)}px` }}>
         {floating.filter(f => f.side === 'enemy').map((ft, i) => (
           <div key={ft.id} className={`absolute animate-bounce-up font-black drop-shadow-[0_2px_8px_rgba(0,0,0,1)] text-right right-0 ${
-            ft.type === 'critical' ? 'text-yellow-300 text-4xl' :
-            ft.type === 'damage'   ? 'text-orange-300 text-3xl' :
-            ft.type === 'miss'     ? 'text-gray-400 text-lg italic' :
+            ft.type === 'critical' ? 'text-yellow-300 text-5xl' :
+            ft.type === 'damage'   ? 'text-orange-300 text-4xl' :
+            ft.type === 'miss'     ? 'text-gray-400 text-xl italic' :
             'text-blue-300 text-sm'
-          }`} style={{ top: `${i * 44}px` }}>{ft.text}</div>
+          }`} style={{ top: `${i * 54}px` }}>{ft.text}</div>
         ))}
       </div>
 
@@ -2079,15 +2381,34 @@ export default function SwordmastersAscent() {
             </div>
           </div>
           {/* MP */}
-          <div className="h-1.5 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>
-            <div className="h-full rounded-sm bg-blue-400 transition-all duration-700"
-              style={{ width: `${Math.max(0,(player.mp/player.maxMp)*100)}%` }} />
+          <div>
+            <div className="flex justify-between text-[9px] mb-0.5">
+              <span className="text-blue-400 font-bold">MP {player.mp}</span>
+              <span className="text-gray-600">{player.maxMp}</span>
+            </div>
+            <div className="h-1.5 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="h-full rounded-sm bg-blue-400 transition-all duration-700"
+                style={{ width: `${Math.max(0,(player.mp/player.maxMp)*100)}%` }} />
+            </div>
           </div>
           {/* 스태미나 */}
-          <div className="h-1 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.5)' }}>
-            <div className="h-full rounded-sm transition-all duration-700"
-              style={{ width: `${Math.max(0,(player.stamina/player.maxStamina)*100)}%`,
-                background: player.stamina/player.maxStamina > 0.5 ? '#ca8a04' : '#ea580c' }} />
+          <div>
+            <div className="flex justify-between text-[9px] mb-0.5">
+              <span className="text-yellow-500 font-bold">ST {player.stamina}</span>
+              <span className="text-gray-600">{player.maxStamina}</span>
+            </div>
+            <div className="h-1.5 rounded-sm overflow-hidden" style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.06)' }}>
+              <div className="h-full rounded-sm transition-all duration-700"
+                style={{ width: `${Math.max(0,(player.stamina/player.maxStamina)*100)}%`,
+                  background: player.stamina/player.maxStamina > 0.5 ? '#ca8a04' : '#ea580c' }} />
+            </div>
+          </div>
+          {/* 능력치 */}
+          <div className="flex gap-2 flex-wrap pt-0.5">
+            <span className="text-[9px] text-gray-400">💪<b className="text-gray-200">{pStats.strength}</b></span>
+            <span className="text-[9px] text-gray-400">👣<b className="text-gray-200">{pStats.agility}</b></span>
+            <span className="text-[9px] text-gray-400">🛡<b className="text-gray-200">{pStats.armor}%</b></span>
+            {magicCooldown > 0 && <span className="text-[8px] text-purple-400">✨{magicCooldown}턴</span>}
           </div>
         </div>
 
@@ -2134,15 +2455,32 @@ export default function SwordmastersAscent() {
             </div>
           </div>
           {/* 적 MP */}
-          <div className="h-1.5 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.06)' }}>
-            <div className="h-full bg-purple-500 rounded-sm transition-all duration-700"
-              style={{ width:`${Math.max(0,(enemy.mp/enemy.maxMp)*100)}%` }} />
+          <div>
+            <div className="flex justify-between text-[9px] mb-0.5">
+              <span className="text-purple-400 font-bold">MP {enemy.mp}</span>
+              <span className="text-gray-600">{enemy.maxMp}</span>
+            </div>
+            <div className="h-1.5 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.6)', border:'1px solid rgba(255,255,255,0.06)' }}>
+              <div className="h-full bg-purple-500 rounded-sm transition-all duration-700"
+                style={{ width:`${Math.max(0,(enemy.mp/enemy.maxMp)*100)}%` }} />
+            </div>
+          </div>
+          {/* 적 스태미나 */}
+          <div>
+            <div className="flex justify-between text-[9px] mb-0.5">
+              <span className="text-orange-400 font-bold">ST {enemy.stamina}</span>
+              <span className="text-gray-600">{enemy.maxStamina}</span>
+            </div>
+            <div className="h-1.5 rounded-sm overflow-hidden" style={{ background:'rgba(0,0,0,0.5)', border:'1px solid rgba(255,255,255,0.06)' }}>
+              <div className="h-full rounded-sm bg-orange-600 transition-all duration-700"
+                style={{ width:`${Math.max(0,(enemy.stamina/enemy.maxStamina)*100)}%` }} />
+            </div>
           </div>
           {/* 적 스탯 요약 */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[9px] font-bold ${eStats.strength > pStats.strength ? 'text-red-400' : 'text-green-400'}`}>💪{eStats.strength}</span>
             <span className={`text-[9px] font-bold ${eStats.agility > pStats.agility ? 'text-red-400' : 'text-green-400'}`}>🥾{eStats.agility}</span>
-            {magicCooldown > 0 && <span className="text-[8px] text-red-500">✨{magicCooldown}턴</span>}
+            <span className="text-[9px] text-gray-400">🛡{eStats.armor}%</span>
           </div>
         </div>
       </div>
@@ -2227,28 +2565,61 @@ export default function SwordmastersAscent() {
                   </button>
                 </div>
                 {subOpts.map(sub => {
-                  const disabled = subDisabled(sub);
-                  const isPerfect = sub === perfectSub;
+                  const disabled  = subDisabled(sub);
+                  const isPerfect = sub === perfectSub;                               // 적 예상 서브를 카운터
+                  const isMiss    = !isPerfect && PERFECT_COUNTER[sub] === likelySub; // 적 예상 서브에 역카운터당함
+                  // 힘싸움 예상 주사위 수 (공격·방어에서만 의미 있음)
+                  const baseStrDice = getDiceCount(pStats.strength, eStats.strength);
+                  const strDicePreview = playerMain === '공격' || playerMain === '방어'
+                    ? Math.min(4, Math.max(1, baseStrDice + (isPerfect ? 1 : isMiss ? -1 : 0)))
+                    : null;
                   return (
                     <button key={sub} disabled={disabled} onClick={() => !disabled && handleSubSelect(sub)}
-                      className={`w-full flex items-center justify-between px-4 py-2.5 rounded-lg border transition-all active:scale-95 ${
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all active:scale-95 ${
                         disabled  ? 'opacity-40 cursor-not-allowed bg-black/40 border-gray-800 text-gray-600' :
                         isPerfect ? 'bg-yellow-900/60 border-yellow-600/70 text-yellow-200 hover:brightness-125' :
+                        isMiss    ? 'bg-red-950/50 border-red-800/50 text-red-300 hover:brightness-125' :
                                     'bg-black/60 border-gray-700/60 text-gray-200 hover:bg-black/80 hover:border-gray-500'
                       }`}>
-                      <span className="text-sm font-bold">{isPerfect && <span className="text-yellow-400 mr-1.5">★</span>}{sub}</span>
-                      {isPerfect && <span className="text-[9px] text-yellow-600 font-bold">최적</span>}
+                      <div className="flex flex-col items-start min-w-0">
+                        <span className="text-sm font-bold leading-tight">
+                          {isPerfect && <span className="text-yellow-400 mr-1">★</span>}
+                          {isMiss    && <span className="text-red-500 mr-1">✗</span>}
+                          {sub}
+                        </span>
+                        <span className={`text-[9px] leading-tight mt-0.5 ${
+                          isPerfect ? 'text-yellow-600' : isMiss ? 'text-red-700' : 'text-gray-600'
+                        }`}>
+                          {isPerfect ? `카운터 — 힘싸움 +1주사위` :
+                           isMiss    ? `역카운터 — 힘싸움 -1주사위` :
+                                       SUB_ACTION_INFO[sub]?.desc ?? ''}
+                        </span>
+                      </div>
+                      {strDicePreview !== null && !disabled && (
+                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${
+                          isPerfect ? 'bg-yellow-800/60 text-yellow-300' :
+                          isMiss    ? 'bg-red-900/60 text-red-400' :
+                                      'bg-gray-800 text-gray-400'
+                        }`}>
+                          🎲{strDicePreview}
+                        </span>
+                      )}
                     </button>
                   );
                 })}
               </div>
             )}
-            {/* 롤링/결과 시 주사위 패널 */}
+            {/* 롤링/결과 — 하단 좌측엔 미니 상태만 표시 */}
             {(combatStep === 'rolling' || combatStep === 'result') && turnResult && (
-              <div className="rounded-xl overflow-hidden" style={{ background: 'rgba(0,0,0,0.75)', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <DicePanel result={turnResult} rolling={diceRolling} playerName={player.name} enemyName={enemy.name} />
+              <div className="text-center py-2">
+                {diceRolling
+                  ? <span className="text-yellow-400 font-bold animate-pulse text-sm">🎲 주사위 굴리는 중...</span>
+                  : <span className={`font-bold text-sm ${QUALITY_COLOR[turnResult.quality]}`}>
+                      {turnResult.quality === 'perfect' ? '🌟 완벽!' : turnResult.quality === 'partial' ? '✅ 성공' : '❌ 실패'}
+                    </span>
+                }
                 {combatStep === 'result' && enemy.hp > 0 && player.hp > 0 && (
-                  <div className="text-center text-gray-600 text-[10px] pb-2 animate-pulse">다음 턴 대기 중...</div>
+                  <div className="text-gray-600 text-[10px] mt-1 animate-pulse">클릭하거나 대기...</div>
                 )}
               </div>
             )}

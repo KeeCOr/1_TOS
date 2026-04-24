@@ -39,3 +39,68 @@
 .animate-card-hit {
   animation: card-hit 0.3s ease-out;
 }
+
+/* 주사위 결과 연출 */
+@keyframes quality-perfect {
+  0%   { transform: scale(0.4) rotate(-8deg); opacity: 0; filter: blur(4px); }
+  55%  { transform: scale(1.25) rotate(3deg); opacity: 1; filter: blur(0); }
+  75%  { transform: scale(0.95) rotate(-1deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes quality-miss {
+  0%   { transform: translateX(0); }
+  15%  { transform: translateX(-10px) rotate(-2deg); }
+  35%  { transform: translateX(10px) rotate(2deg); }
+  55%  { transform: translateX(-7px) rotate(-1deg); }
+  75%  { transform: translateX(7px) rotate(1deg); }
+  100% { transform: translateX(0); }
+}
+@keyframes dice-settle {
+  0%   { transform: scale(1.5) rotate(18deg); opacity: 0.6; }
+  55%  { transform: scale(0.9) rotate(-5deg); opacity: 1; }
+  78%  { transform: scale(1.07) rotate(2deg); }
+  100% { transform: scale(1) rotate(0); opacity: 1; }
+}
+@keyframes screen-flash-gold {
+  0%   { opacity: 0; }
+  25%  { opacity: 0.22; }
+  100% { opacity: 0; }
+}
+@keyframes screen-flash-red {
+  0%   { opacity: 0; }
+  25%  { opacity: 0.16; }
+  100% { opacity: 0; }
+}
+@keyframes screen-flash-blue {
+  0%   { opacity: 0; }
+  25%  { opacity: 0.12; }
+  100% { opacity: 0; }
+}
+.animate-quality-perfect { animation: quality-perfect 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+.animate-quality-miss    { animation: quality-miss 0.45s ease-in-out; }
+.animate-dice-settle     { animation: dice-settle 0.4s ease-out forwards; }
+.animate-screen-flash-gold { animation: screen-flash-gold 0.9s ease-out forwards; }
+.animate-screen-flash-red  { animation: screen-flash-red  0.6s ease-out forwards; }
+.animate-screen-flash-blue { animation: screen-flash-blue 0.5s ease-out forwards; }
+
+@keyframes winner-pop {
+  0%   { opacity: 0; transform: scale(0.2) translateY(30px); }
+  55%  { opacity: 1; transform: scale(1.25) translateY(-8px); }
+  75%  { transform: scale(0.93) translateY(0); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+@keyframes loser-shake {
+  0%,100% { transform: translateX(0); }
+  18%  { transform: translateX(-10px) rotate(-3deg); }
+  36%  { transform: translateX(10px) rotate(3deg); }
+  54%  { transform: translateX(-7px) rotate(-2deg); }
+  72%  { transform: translateX(7px) rotate(1deg); }
+}
+@keyframes winner-fade {
+  0%   { opacity: 1; }
+  70%  { opacity: 1; }
+  100% { opacity: 0; }
+}
+.animate-winner-pop  { animation: winner-pop 0.5s cubic-bezier(0.34,1.56,0.64,1) forwards,
+                                  winner-fade 1.4s ease-out forwards; }
+.animate-loser-shake { animation: loser-shake 0.45s ease-in-out; }
