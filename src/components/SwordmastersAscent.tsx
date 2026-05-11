@@ -4,17 +4,49 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   ActionType, SubAction, Character, FloatingText, GamePhase,
   Equipment, Item, Title, MagicSpell, CombatStep, MatchQuality, EnemyIntent, TurnResult, DiceContest, MagicDiceRoll,
-  FloorGhosts,
+  FloorGhosts, StatusEffect, AIContext,
+  FloorEvent, FloorEventChoice, FloorEventType,
   SUB_ACTIONS, SUB_ACTION_INFO, PERFECT_COUNTER, MAGIC_SPELL_POOL, getDiceCount,
   generateEnemyIntent, resolveTurn, generateEnemy, createPlayer,
   getRewardEquipment, ITEM_REWARD_POOL, generateCombatTitles,
+  generateFloorEvent, shouldTriggerEvent,
   TITLES_DATA, DEFAULT_ACTION_WEIGHTS, DICE_FACE,
   DISTANCE_LABELS, DISTANCE_COLORS, distanceBonus, getEffectiveStats, getStaminaDelta,
+  getEffectiveStatsWithSynergy, getActiveSynergies, SynergyDefinition,
   getMagicCostByProgress, getMagicCooldownByProgress, getMagicRegenByProgress,
   COMBAT_ROW_DEFAULT, COMBAT_ROW_MIN, COMBAT_ROW_MAX,
   CONDITION_LABELS, CONDITION_COLORS, rollCondition,
   getActionRange,
+  UnlockKey, StartBuild, UNLOCK_CONDITIONS,
+  Injury, getBodyInjuryStaminaDrain,
 } from '@/lib/gameData';
+
+/** 활성 상태효과를 캐릭터에 틱 처리: stamina_drain 즉시 적용, duration 1 감소, duration=0 제거 */
+function tickStatusEffects(char: Character): Character {
+  const effects = char.activeEffects ?? [];
+  if (effects.length === 0) return char;
+
+  let { stamina } = char;
+  effects.forEach(e => {
+    if (e.type === 'stamina_drain' && e.duration > 0) {
+      stamina = Math.max(0, stamina - e.value);
+    }
+  });
+
+  return {
+    ...char,
+    stamina,
+    activeEffects: effects
+      .map(e => ({ ...e, duration: e.duration - 1 }))
+      .filter(e => e.duration > 0),
+  };
+}
+
+/** TurnResult의 newEffects를 캐릭터에 추가 */
+function addStatusEffects(char: Character, effects?: StatusEffect[]): Character {
+  if (!effects || effects.length === 0) return char;
+  return { ...char, activeEffects: [...(char.activeEffects ?? []), ...effects] };
+}
 
 // ── 저장 슬롯 (3개) ───────────────────────────────────────────
 const SAVE_SLOT_KEYS = [
@@ -36,6 +68,33 @@ function saveHighScore(score: number) {
   if (score > prev) localStorage.setItem(HIGH_SCORE_KEY, String(score));
 }
 
+const UNLOCKS_KEY = 'swordmasters-unlocks';
+const BOSS_COUNT_KEY = 'swordmasters-boss-count';
+
+function loadUnlocks(): Set<UnlockKey> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(UNLOCKS_KEY);
+    if (!raw) return new Set();
+    return new Set(JSON.parse(raw) as UnlockKey[]);
+  } catch { return new Set(); }
+}
+
+function saveUnlocks(unlocks: Set<UnlockKey>) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(UNLOCKS_KEY, JSON.stringify([...unlocks]));
+}
+
+function loadBossCount(): number {
+  if (typeof window === 'undefined') return 0;
+  return parseInt(localStorage.getItem(BOSS_COUNT_KEY) ?? '0', 10) || 0;
+}
+
+function saveBossCount(n: number) {
+  if (typeof window === 'undefined') return;
+  localStorage.setItem(BOSS_COUNT_KEY, String(n));
+}
+
 export interface SaveState {
   phase: GamePhase;
   floor: number;
@@ -54,6 +113,8 @@ export interface SaveState {
   stats: { floorsCleared:number; bossesKilled:number; perfectBlocks:number };
   logs: string[];
   legacy: Character[];
+  // WARNING: FloorEvent.choices[].apply is not serializable — do NOT JSON.stringify this field directly. Regenerate event on load.
+  currentEvent?: FloorEvent | null;
 }
 
 type SlotMeta = { floor: number; timestamp: number; playerName: string } | null;
@@ -625,10 +686,10 @@ const STAT_LABELS: Record<string, string> = {
   strength: '💪 힘', agility: '👣 민첩', armor: '🛡️ 방어율', critChance: '🗡️ 치명타',
 };
 
-function StatRollScreen({ onComplete, highScore, playerName }: {
-  onComplete: (p: Character) => void; highScore: number; playerName: string;
+function StatRollScreen({ onComplete, highScore, playerName, selectedBuild }: {
+  onComplete: (p: Character) => void; highScore: number; playerName: string; selectedBuild: StartBuild;
 }) {
-  const playerRef = useRef(createPlayer(highScore, playerName));
+  const playerRef = useRef(createPlayer(highScore, playerName, selectedBuild));
   const finalRef  = useRef(playerRef.current.stats);
 
   const [display, setDisplay] = useState({ strength:0, agility:0, armor:0, critChance:0 });
@@ -993,6 +1054,75 @@ function GameOverScreen({ floor, onRetry, onWatchAd }: {
   );
 }
 
+function EventScreen({
+  event, floor, onChoice,
+}: {
+  event: FloorEvent;
+  floor: number;
+  onChoice: (choice: FloorEventChoice) => void;
+}) {
+  const iconMap: Record<FloorEventType, string> = {
+    shelter: '⛺',
+    merchant: '🧳',
+    ruins: '🏚',
+    oath: '⚔',
+  };
+
+  const bgMap: Record<FloorEventType, string> = {
+    shelter: 'from-green-950/60 to-gray-950',
+    merchant: 'from-yellow-950/60 to-gray-950',
+    ruins: 'from-purple-950/60 to-gray-950',
+    oath: 'from-red-950/60 to-gray-950',
+  };
+
+  return (
+    <div className={`min-h-screen bg-gradient-to-b ${bgMap[event.type]} flex flex-col`}>
+      {/* 헤더 */}
+      <div className="px-4 pt-6 pb-2 border-b border-gray-800/60 flex items-center gap-3">
+        <span className="text-3xl">{iconMap[event.type]}</span>
+        <div>
+          <div className="text-xs text-gray-500 font-bold uppercase tracking-widest">{floor}층 이벤트</div>
+          <div className="text-lg font-black text-yellow-300">{event.title}</div>
+        </div>
+      </div>
+
+      {/* 내러티브 */}
+      <div className="px-5 py-4">
+        <p className="text-sm text-gray-300 leading-relaxed italic border-l-2 border-yellow-700/60 pl-3">
+          {event.narrative}
+        </p>
+      </div>
+
+      {/* 선택지 */}
+      <div className="px-4 flex flex-col gap-3 pb-8">
+        {event.choices.map(choice => (
+          <button
+            key={choice.id}
+            onClick={() => onChoice(choice)}
+            className={`w-full text-left rounded-xl border p-4 transition-all duration-150 active:scale-[0.98]
+              ${choice.risk
+                ? 'border-orange-700/50 bg-orange-950/30 hover:bg-orange-950/50 hover:border-orange-600/70'
+                : choice.id === 'skip'
+                ? 'border-gray-700/40 bg-gray-900/40 hover:bg-gray-800/60'
+                : 'border-yellow-700/50 bg-yellow-950/20 hover:bg-yellow-950/40 hover:border-yellow-600/70'
+              }`}
+          >
+            <div className={`font-bold text-sm mb-1 ${
+              choice.risk ? 'text-orange-300' : choice.id === 'skip' ? 'text-gray-400' : 'text-yellow-200'
+            }`}>
+              {choice.label}
+            </div>
+            <div className="text-xs text-gray-400">{choice.description}</div>
+            {choice.risk && (
+              <div className="text-xs text-orange-500 mt-1 font-bold">⚠ {choice.risk}</div>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════
 // Tutorial Screen
 // ════════════════════════════════════════════════════════════
@@ -1282,11 +1412,14 @@ function TutorialScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial }: {
+function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial, unlockedKeys, selectedBuild, setSelectedBuild }: {
   highScore: number;
   onSelectSlot: (slotIndex: number) => void;
   onNewGame: (slotIndex: number) => void;
   onTutorial: () => void;
+  unlockedKeys: Set<UnlockKey>;
+  selectedBuild: StartBuild;
+  setSelectedBuild: (b: StartBuild) => void;
 }) {
   const [metas, setMetas] = useState<ReturnType<typeof getAllSlotMetas>>([null, null, null]);
   const [confirm, setConfirm] = useState<{ slot: number; mode: 'delete' | 'new' } | null>(null);
@@ -1421,6 +1554,64 @@ function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial }: {
             </div>
           );
         })}
+      </div>
+
+      {/* 시작 빌드 선택 */}
+      <div className="mt-4 mb-2 px-5 w-full max-w-xs">
+        <div className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2">시작 빌드</div>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setSelectedBuild('default')}
+            className={`text-left px-3 py-2 rounded-lg border text-sm transition-all ${
+              selectedBuild === 'default'
+                ? 'border-yellow-600 bg-yellow-950/40 text-yellow-200'
+                : 'border-gray-700/50 bg-gray-900/40 text-gray-400 hover:border-gray-600'
+            }`}
+          >
+            <span className="font-bold">기본 검사</span>
+            <span className="text-xs text-gray-500 ml-2">— 표준 능력치 시작</span>
+          </button>
+
+          {UNLOCK_CONDITIONS.filter(u => u.key !== 'unlock_hard_mode').map(uc => {
+            const buildMap: Record<UnlockKey, StartBuild> = {
+              unlock_assassin: 'assassin',
+              unlock_magic_start: 'magic_start',
+              unlock_arcane: 'arcane',
+              unlock_tank: 'tank',
+              unlock_hard_mode: 'default',
+            };
+            const isUnlocked = unlockedKeys.has(uc.key);
+            const build = buildMap[uc.key];
+            return (
+              <button
+                key={uc.key}
+                type="button"
+                disabled={!isUnlocked}
+                onClick={() => isUnlocked && setSelectedBuild(build)}
+                className={`text-left px-3 py-2 rounded-lg border text-sm transition-all ${
+                  !isUnlocked
+                    ? 'border-gray-800/40 bg-gray-950/20 text-gray-700 cursor-not-allowed'
+                    : selectedBuild === build
+                    ? 'border-yellow-600 bg-yellow-950/40 text-yellow-200'
+                    : 'border-gray-700/50 bg-gray-900/40 text-gray-300 hover:border-gray-600'
+                }`}
+              >
+                {isUnlocked ? (
+                  <>
+                    <span className="font-bold text-yellow-300">{uc.label}</span>
+                    <span className="text-xs text-gray-400 block mt-0.5">{uc.description}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-bold text-gray-600">???</span>
+                    <span className="text-xs text-gray-700 block mt-0.5">{uc.hint}</span>
+                  </>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* 튜토리얼 버튼 */}
@@ -1576,6 +1767,8 @@ export default function SwordmastersAscent() {
   const [combatStep, setCombatStep] = useState<CombatStep>('select_main');
   const [intent, setIntent]         = useState<EnemyIntent | null>(null);
   const [playerMain, setPlayerMain] = useState<ActionType | null>(null);
+  const [lastPlayerMain, setLastPlayerMain] = useState<ActionType | null>(null);
+  const [lastPlayerSub,  setLastPlayerSub]  = useState<SubAction | null>(null);
   const [turnResult, setTurnResult] = useState<TurnResult | null>(null);
   const [diceRolling, setDiceRolling] = useState(false);
   const [hitFlash, setHitFlash] = useState<'player' | 'enemy' | 'both' | null>(null);
@@ -1584,8 +1777,14 @@ export default function SwordmastersAscent() {
   const [stats, setStats] = useState({ floorsCleared:0, bossesKilled:0, perfectBlocks:0 });
   const [pendingMagicAbsorb, setPendingMagicAbsorb] = useState<MagicSpell | null>(null);
   const [resultFlash, setResultFlash] = useState<'perfect' | 'critical' | 'miss' | null>(null);
+  const [screenShake,     setScreenShake]     = useState(false);
+  const [injuryVignette,  setInjuryVignette]  = useState(false);
+  const [enemyDeathFlash, setEnemyDeathFlash] = useState(false);
   const [playerMoveDir, setPlayerMoveDir] = useState<'forward' | 'back' | null>(null);
   const [enemyMoveDir,  setEnemyMoveDir]  = useState<'forward' | 'back' | null>(null);
+  const [currentEvent, setCurrentEvent]   = useState<FloorEvent | null>(null);
+  const [unlockedKeys, setUnlockedKeys] = useState<Set<UnlockKey>>(() => loadUnlocks());
+  const [selectedBuild, setSelectedBuild] = useState<StartBuild>('default');
   const prevPlayerPos = useRef(playerPos);
   const prevEnemyPos  = useRef(enemyPos);
   useEffect(() => {
@@ -1605,6 +1804,21 @@ export default function SwordmastersAscent() {
     }
   }, [enemyPos]);
   const addLog = useCallback((msg: string) => setLogs(p => [...p.slice(-60), msg]), []);
+
+  const checkAndUnlock = useCallback((floor: number, bossKilled: boolean) => {
+    const bossCount = loadBossCount() + (bossKilled ? 1 : 0);
+    if (bossKilled) saveBossCount(bossCount);
+    setUnlockedKeys(prev => {
+      const updated = new Set(prev);
+      if (floor >= 5)  updated.add('unlock_assassin');
+      if (floor >= 10) updated.add('unlock_arcane');
+      if (floor >= 20) updated.add('unlock_tank');
+      if (bossKilled && bossCount >= 1) updated.add('unlock_magic_start');
+      if (bossCount >= 5) updated.add('unlock_hard_mode');
+      if (updated.size !== prev.size) saveUnlocks(updated);
+      return updated.size !== prev.size ? updated : prev;
+    });
+  }, []);
 
   const showFloat = useCallback((text: string, type: FloatingText['type'], side: FloatingText['side']) => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -1690,6 +1904,7 @@ export default function SwordmastersAscent() {
       playerPos, enemyPos, playerRow, enemyRow, magicCooldown,
       combatStep: safeCombatStep, player, enemy, intent,
       stats, logs, legacy,
+      currentEvent: null, // FloorEvent.apply는 직렬화 불가 — 저장 안 함
     };
     saveGameSlot(activeSaveSlot, state);
     addLog('💾 게임 저장됨');
@@ -1714,13 +1929,16 @@ export default function SwordmastersAscent() {
       playerRow: pRow ?? COMBAT_ROW_DEFAULT,
       enemyRow:  eRow  ?? COMBAT_ROW_DEFAULT,
       enemyPos:  ePos  ?? 4,
+      bossPattern: eng.bossPattern as AIContext['bossPattern'],
+      playerLastMain: lastPlayerMain ?? undefined,
+      playerLastSub:  lastPlayerSub  ?? undefined,
     };
     setIntent(generateEnemyIntent(w, ctx));
     setCombatStep('select_main');
     setPlayerMain(null);
     setTurnResult(null);
     setDiceRolling(false);
-  }, []);
+  }, [lastPlayerMain, lastPlayerSub]);
 
   // ── Auto-advance: result → next turn (req #4) ─────────────
   useEffect(() => {
@@ -1762,6 +1980,15 @@ export default function SwordmastersAscent() {
     // 클리어한 층에 현재 캐릭터를 유령으로 등록 (다음 플레이에서 만날 수 있음)
     addFloorGhost(currentFloor, p);
     const nf = currentFloor + 1;
+    // ── 이벤트 분기 ──────────────────────────────────────────
+    if (shouldTriggerEvent(nf)) {
+      const event = generateFloorEvent(nf, p);
+      setCurrentEvent(event);
+      setFloor(nf);
+      setPlayer(p); // 아직 컨디션 리롤 안 함 — 이벤트 후 전투 진입 시 적용
+      setPhase('event');
+      return;
+    }
     const ghosts = loadFloorGhosts();
     const e = generateEnemy(nf, legacy, ghosts);
     const newCond = rollCondition();
@@ -1773,6 +2000,24 @@ export default function SwordmastersAscent() {
     spawnIntent(e, COMBAT_ROW_DEFAULT, COMBAT_ROW_DEFAULT, 1, 4, pWithCond.hp, pWithCond.maxHp);
   }, [legacy, addLog, spawnIntent]);
 
+  const handleEventChoice = useCallback((choice: FloorEventChoice) => {
+    if (!player) return;
+    // 선택 효과 적용
+    const updatedPlayer = choice.apply(player);
+    setCurrentEvent(null);
+
+    // 이벤트 후 전투 진입: 컨디션 리롤 + 적 생성
+    const ghosts = loadFloorGhosts();
+    const e = generateEnemy(floor, legacy, ghosts);
+    const newCond = rollCondition();
+    const pWithCond = { ...updatedPlayer, condition: newCond, hp: updatedPlayer.hp }; // HP는 이벤트 효과 반영
+    setEnemy(e); setPlayer(pWithCond); setPhase('battle');
+    setPlayerPos(1); setEnemyPos(4); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
+    const condMsg = newCond !== 'normal' ? ` (컨디션: ${CONDITION_LABELS[newCond]})` : '';
+    addLog(`=== ${floor}층 ===  적: ${e.name}${e.isLegacy ? ' (유령)' : ''}${condMsg}`);
+    spawnIntent(e, COMBAT_ROW_DEFAULT, COMBAT_ROW_DEFAULT, 1, 4, pWithCond.hp, pWithCond.maxHp);
+  }, [player, floor, legacy, addLog, spawnIntent]);
+
   // ── Step 1: pick main ────────────────────────────────────
   const handleMainSelect = useCallback((action: ActionType) => {
     setPlayerMain(action);
@@ -1783,7 +2028,8 @@ export default function SwordmastersAscent() {
   const handleSubSelect = useCallback((sub: SubAction) => {
     if (!player || !enemy || !intent || !playerMain) return;
 
-    const result = resolveTurn(playerMain, sub, enemy, intent, player, playerPos, enemyPos, playerRow, enemyRow);
+    const { magicDamageBonus, rangedDamageBonus } = getEffectiveStatsWithSynergy(player);
+    const result = resolveTurn(playerMain, sub, enemy, intent, player, playerPos, enemyPos, playerRow, enemyRow, magicDamageBonus, rangedDamageBonus);
 
     // Show rolling animation first (req #2)
     setTurnResult(result);
@@ -1794,6 +2040,8 @@ export default function SwordmastersAscent() {
       // ── Phase 1 (t=1900ms): 주사위 완전 종료 + 상태 전체 업데이트 ──
       setDiceRolling(false);
       setCombatStep('result');
+      setLastPlayerMain(playerMain);
+      setLastPlayerSub(sub);
 
       // 위치 업데이트
       setPlayerPos(result.newPlayerPos);
@@ -1871,8 +2119,39 @@ export default function SwordmastersAscent() {
         ...player,
         hp: Math.max(0, newPlayerHp),
         mp: Math.max(0, newPlayerMp),
-        stamina: Math.max(0, Math.min(player.maxStamina, player.stamina + playerStamDelta)),
+        stamina: Math.max(0, Math.min(player.maxStamina, player.stamina + playerStamDelta + (result.bonusStamina ?? 0))),
       };
+      // StatusEffect 틱 처리 (기존 효과 만료) + 새 효과 추가
+      updatedPlayer = tickStatusEffects(updatedPlayer);
+      updatedPlayer = addStatusEffects(updatedPlayer, result.newPlayerEffects);
+
+      // 몸 부상 스테미너 틱 (이번 턴 새로 생긴 부상은 다음 턴부터 적용)
+      const bodyDrain = getBodyInjuryStaminaDrain(updatedPlayer.injuries ?? []);
+      if (bodyDrain > 0) {
+        updatedPlayer = { ...updatedPlayer, stamina: Math.max(0, updatedPlayer.stamina - bodyDrain) };
+      }
+
+      // 새 부상 추가
+      if (result.newPlayerInjury) {
+        const injury = result.newPlayerInjury;
+        const existingInjuries = updatedPlayer.injuries ?? [];
+        const existing = existingInjuries.find(i => i.type === injury.type);
+        // 기존 부상이 이미 major면 덮어쓰지 않음 (rollInjury에서 막아야 하지만 방어)
+        if (!existing || existing.severity !== 'major' || injury.severity === 'major') {
+          const filtered = existingInjuries.filter(i => i.type !== injury.type);
+          updatedPlayer = { ...updatedPlayer, injuries: [...filtered, injury] };
+          const typeName = injury.type === 'arm' ? '팔' : injury.type === 'leg' ? '다리' : '몸';
+          const sevName = injury.severity === 'minor' ? '경상' : '중상';
+          const isUpgrade = existing && existing.severity === 'minor' && injury.severity === 'major';
+          addLog(`  ${isUpgrade ? '부상 악화' : '부상 발생'}: ${typeName} 부상 (${sevName})`);
+          setInjuryVignette(true);
+          setTimeout(() => setInjuryVignette(false), 1200);
+        }
+      }
+
+      // updatedEnemy is const — reassign:
+      let mutableEnemy = tickStatusEffects(updatedEnemy);
+      mutableEnemy = addStatusEffects(mutableEnemy, result.newEnemyEffects);
       // 아이템 소모 (모든 아이템은 사용 후 1개 제거)
       if (playerMain === '아이템 사용') {
         const usedIdx = updatedPlayer.inventory.findIndex(it => it.name === sub);
@@ -1910,6 +2189,11 @@ export default function SwordmastersAscent() {
           : result.damageDealt > 0 ? 'enemy'
           : result.damageTaken > 0 ? 'player' : null;
         if (flash) { setHitFlash(flash); setTimeout(() => setHitFlash(null), 350); }
+        // 화면 흔들림 — 최대체력의 20% 이상 피해 시
+        if (result.damageTaken >= player.maxHp * 0.20) {
+          setScreenShake(true);
+          setTimeout(() => setScreenShake(false), 400);
+        }
         if (result.healAmount && result.healAmount > 0) {
           showFloat(`+${result.healAmount}`, 'heal', 'player');
           addLog(`  체력이 회복되었다.`);
@@ -1919,8 +2203,21 @@ export default function SwordmastersAscent() {
         }
       };
 
+      // ── 검사 왕 2페이즈 부활 ──────────────────────────────
+      if (mutableEnemy.hp <= 0 && mutableEnemy.bossPattern === 'king' && !mutableEnemy.phase2Triggered) {
+        const reviveHp = Math.floor(mutableEnemy.maxHp * 0.5);
+        mutableEnemy = {
+          ...mutableEnemy,
+          hp: reviveHp,
+          phase2Triggered: true,
+          name: '검사 왕 (2페이즈)',
+          actionWeights: { '공격': 50, '이동': 10, '방어': 15, '마법 사용': 25, '아이템 사용': 0 },
+        };
+        addLog('검사 왕이 쓰러지지 않는다! 더 강한 힘으로 부활했다!');
+      } else if (mutableEnemy.hp <= 0) {
+        setEnemyDeathFlash(true);
+        setTimeout(() => setEnemyDeathFlash(false), 650);
       // Enemy defeated
-      if (updatedEnemy.hp <= 0) {
         const isBoss = enemy.isBoss ?? false;
         newStats = { ...newStats, floorsCleared: newStats.floorsCleared + 1,
           bossesKilled: isBoss ? newStats.bossesKilled + 1 : newStats.bossesKilled };
@@ -1949,7 +2246,7 @@ export default function SwordmastersAscent() {
         addLog(`${enemy.name}이 쓰러졌다.`);
 
         // 마법 흡수
-        const enemySpell = updatedEnemy.magicSlots.length > 0 ? updatedEnemy.magicSlots[0] : null;
+        const enemySpell = mutableEnemy.magicSlots.length > 0 ? mutableEnemy.magicSlots[0] : null;
         if (enemySpell) {
           if (updatedPlayer.magicSlots.length < 3) {
             const newSlots = [...updatedPlayer.magicSlots, enemySpell] as MagicSpell[];
@@ -1961,7 +2258,8 @@ export default function SwordmastersAscent() {
           }
         }
 
-        setPlayer(updatedPlayer); setEnemy(updatedEnemy);
+        checkAndUnlock(floor, enemy.isBoss ?? false);
+        setPlayer(updatedPlayer); setEnemy(mutableEnemy);
         setTimeout(showDamageEffects, 500);
         setTimeout(() => setPhase('reward'), 1200);
         return;
@@ -1984,7 +2282,7 @@ export default function SwordmastersAscent() {
         updateHighScore(floor);
         addLog('패배');
         setPlayer({ ...updatedPlayer, hp: 0 });
-        setEnemy(updatedEnemy);
+        setEnemy(mutableEnemy);
         setTimeout(showDamageEffects, 500);
         setTimeout(() => setPhase('gameover'), 1200);
         return;
@@ -1992,18 +2290,18 @@ export default function SwordmastersAscent() {
 
       setStats(newStats);
       setPlayer(updatedPlayer);
-      setEnemy(updatedEnemy);
+      setEnemy(mutableEnemy);
       // ── Phase 2 (t=2400ms): 데미지 연출 — 주사위 결과 확인 후 등장 ──
       setTimeout(showDamageEffects, 500);
     }, 1900); // 주사위 전체 완전 종료 대기 (최대 delay=550ms → 1200+550+여유=1900ms)
-  }, [player, enemy, intent, playerMain, playerPos, enemyPos, playerRow, enemyRow, distance, stats, floor, magicCooldown, updateHighScore, addLog, showFloat]);
+  }, [player, enemy, intent, playerMain, playerPos, enemyPos, playerRow, enemyRow, distance, stats, floor, magicCooldown, updateHighScore, addLog, showFloat, checkAndUnlock]);
 
   // ════════════════════════════════════════════════════════
   // RENDER
   // ════════════════════════════════════════════════════════
 
   if (phase === 'start') return (
-    <div className="min-h-screen"><StartScreen highScore={highScore} onSelectSlot={handleSlotSelect} onNewGame={handleNewGame} onTutorial={() => setPhase('tutorial')} /></div>
+    <div className="min-h-screen"><StartScreen highScore={highScore} onSelectSlot={handleSlotSelect} onNewGame={handleNewGame} onTutorial={() => setPhase('tutorial')} unlockedKeys={unlockedKeys} selectedBuild={selectedBuild} setSelectedBuild={setSelectedBuild} /></div>
   );
 
   if (phase === 'tutorial') return (
@@ -2029,7 +2327,7 @@ export default function SwordmastersAscent() {
   if (phase === 'stat_roll') return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <StatRollScreen highScore={highScore} onComplete={onStatRollComplete} playerName={pendingPlayerName} />
+        <StatRollScreen highScore={highScore} onComplete={onStatRollComplete} playerName={pendingPlayerName} selectedBuild={selectedBuild} />
       </div>
     </div>
   );
@@ -2089,6 +2387,16 @@ export default function SwordmastersAscent() {
         />
       </div>
     </div>
+    );
+  }
+
+  if (phase === 'event' && currentEvent) {
+    return (
+      <EventScreen
+        event={currentEvent}
+        floor={floor}
+        onChoice={handleEventChoice}
+      />
     );
   }
 
@@ -2162,11 +2470,24 @@ export default function SwordmastersAscent() {
   const enemyRight   = Math.round(1280 - enemyLeft   - enemySize);
 
   return (
-    <div className="w-[1280px] h-[720px] relative overflow-hidden"
+    <div className={`w-[1280px] h-[720px] relative overflow-hidden${screenShake ? ' animate-screen-shake' : ''}`}
       style={{ background: '#050508' }}>
 
       {/* ══════ 배경 이미지 ══════ */}
       <img src="/bg/background.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none" />
+
+      {/* ── 부상 비네트 오버레이 ── */}
+      {injuryVignette && (
+        <div className="absolute inset-0 animate-injury-vignette pointer-events-none z-50" />
+      )}
+
+      {/* ── 적 처치 황금 플래시 ── */}
+      {enemyDeathFlash && (
+        <div
+          className="absolute inset-0 animate-enemy-death-flash pointer-events-none z-40"
+          style={{ background: 'radial-gradient(ellipse at 72% 42%, rgba(255,230,100,0.9) 0%, rgba(255,180,40,0.5) 30%, transparent 62%)' }}
+        />
+      )}
 
       {/* ══════ 바닥 원근 그리드 ══════ */}
       {(() => {
@@ -2403,6 +2724,49 @@ export default function SwordmastersAscent() {
                   background: player.stamina/player.maxStamina > 0.5 ? '#ca8a04' : '#ea580c' }} />
             </div>
           </div>
+          {/* 플레이어 활성 상태효과 */}
+          {(player.activeEffects ?? []).length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-0.5">
+              {(player.activeEffects ?? []).map((e, i) => (
+                <span key={i} className="text-[8px] px-1 rounded bg-blue-900/60 text-blue-300 border border-blue-700/40">
+                  {e.type === 'extra_speed_die' ? '⚡+속도' : e.type}({e.duration})
+                </span>
+              ))}
+            </div>
+          )}
+          {/* 플레이어 부상 배지 */}
+          {(player.injuries ?? []).length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-0.5">
+              {(player.injuries ?? []).map((inj, i) => (
+                <span key={inj.type} className={`text-[8px] px-1 rounded font-bold border ${
+                  inj.severity === 'major'
+                    ? 'bg-red-900/70 text-red-200 border-red-600/60'
+                    : 'bg-orange-900/60 text-orange-300 border-orange-700/50'
+                }`}>
+                  {inj.type === 'arm' ? '💪부상' : inj.type === 'leg' ? '🦵부상' : '🫀부상'}
+                  {inj.severity === 'major' ? '(중)' : '(경)'}
+                </span>
+              ))}
+            </div>
+          )}
+          {/* 활성 시너지 배지 */}
+          {(() => {
+            const synergies = getActiveSynergies(player);
+            if (synergies.length === 0) return null;
+            return (
+              <div className="flex gap-1 flex-wrap mt-1">
+                {synergies.map(syn => (
+                  <span
+                    key={syn.id}
+                    className="text-[8px] px-1.5 py-0.5 rounded-full bg-purple-900/50 text-purple-300 border border-purple-700/40 font-bold"
+                    title={syn.description}
+                  >
+                    ✦ {syn.name}
+                  </span>
+                ))}
+              </div>
+            );
+          })()}
           {/* 능력치 */}
           <div className="flex gap-2 flex-wrap pt-0.5">
             <span className="text-[9px] text-gray-400">💪<b className="text-gray-200">{pStats.strength}</b></span>
@@ -2476,6 +2840,20 @@ export default function SwordmastersAscent() {
                 style={{ width:`${Math.max(0,(enemy.stamina/enemy.maxStamina)*100)}%` }} />
             </div>
           </div>
+          {/* 적 활성 상태효과 */}
+          {(enemy.activeEffects ?? []).length > 0 && (
+            <div className="flex gap-1 flex-wrap mt-0.5 justify-end">
+              {(enemy.activeEffects ?? []).map((e, i) => (
+                <span key={i} className="text-[8px] px-1 rounded bg-red-900/60 text-red-300 border border-red-700/40">
+                  {e.type === 'stamina_drain' ? '🔥화상'
+                    : e.type === 'movement_lock' ? '⛓속박'
+                    : e.type === 'agility_debuff' ? '❄빙결'
+                    : e.type === 'extra_speed_die' ? '⚡가속'
+                    : e.type}({e.duration})
+                </span>
+              ))}
+            </div>
+          )}
           {/* 적 스탯 요약 */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`text-[9px] font-bold ${eStats.strength > pStats.strength ? 'text-red-400' : 'text-green-400'}`}>💪{eStats.strength}</span>

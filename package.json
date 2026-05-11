@@ -1,6 +1,6 @@
 {
   "name": "tos-swordmasters-ascent",
-  "version": "1.5.43",
+  "version": "1.5.53",
   "private": true,
   "main": "electron/main.js",
   "scripts": {

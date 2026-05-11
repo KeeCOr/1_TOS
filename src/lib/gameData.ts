@@ -17,7 +17,7 @@ export function getActionRange(action: ActionType, weaponRange: number): number 
   if (action === '아이템 사용') return ITEM_THROW_RANGE;
   return 0; // 이동/방어는 사거리 개념 없음
 }
-export type GamePhase    = 'start' | 'tutorial' | 'naming' | 'stat_roll' | 'battle' | 'reward' | 'gameover';
+export type GamePhase    = 'start' | 'tutorial' | 'naming' | 'stat_roll' | 'battle' | 'reward' | 'event' | 'gameover';
 export type TitleId      = 'weapon_breaker' | 'tower_climber' | 'boss_slayer' | 'magic_adept' | 'survivor' | 'novice' | `combat_${string}`;
 export type MatchQuality = 'perfect' | 'partial' | 'miss';
 export type CombatStep   = 'select_main' | 'select_sub' | 'rolling' | 'result';
@@ -43,8 +43,8 @@ export function getConditionMultiplier(c?: Condition): number {
   switch (c) {
     case 'excellent': return 1.10;
     case 'good':      return 1.05;
-    case 'bad':       return 0.85;
-    case 'terrible':  return 0.70;
+    case 'bad':       return 0.92; // 기존 0.85 → 완화
+    case 'terrible':  return 0.82; // 기존 0.70 → 완화
     default:          return 1.00;
   }
 }
@@ -118,7 +118,7 @@ export const SUB_ACTION_INFO: Record<SubAction, { desc: string; counter: string;
   '대형 치유 물약': { desc: '체력 50 대량 회복', counter: '→ 전진 압박', hint: '큼지막한 물약을 꺼내 뚜껑을 열었다' },
   '번개 일격':  { desc: '번개 마법 공격',     counter: '→ 올려막기', hint: '팔끝에서 파란 전기가 지직거리기 시작했다' },
   '바람 쇄도':  { desc: '바람 마법 공격',     counter: '→ 전진 압박', hint: '양손이 바람을 끌어모으며 소용돌이쳤다' },
-  '뒤로 베기':  { desc: '후퇴하며 베기 (밀착 전용)', counter: '→ 전진 압박', hint: '물러서면서 검을 옆으로 긋는다' },
+  '뒤로 베기':  { desc: '후퇴하며 베기 + 적 밀어냄 (밀착 전용)', counter: '→ 전진 압박', hint: '물러서면서 검을 옆으로 긋는다' },
 };
 
 // ── Distance ─────────────────────────────────────────────────
@@ -188,6 +188,62 @@ export function getEffectiveStats(character: Character): Character['stats'] {
     agility:    Math.max(1, Math.floor(base.agility    * penalty * condMult)),
     critChance: Math.max(1, Math.floor(base.critChance * Math.min(1, (hpFactor + staminaFactor) / 1.2) * condMult)),
   };
+}
+
+/** 부상이 strength/agility 스탯에 미치는 배율 */
+export function getInjuryStatMult(injuries: Injury[], stat: 'strength' | 'agility'): number {
+  let mult = 1.0;
+  for (const inj of injuries) {
+    if (inj.type === 'arm' && stat === 'strength') {
+      mult *= inj.severity === 'minor' ? 0.80 : 0.65;
+    }
+    if (inj.type === 'leg' && stat === 'agility') {
+      mult *= inj.severity === 'minor' ? 0.80 : 0.65;
+    }
+  }
+  return mult;
+}
+
+/** 몸 부상으로 인한 턴당 스테미너 감소량 */
+export function getBodyInjuryStaminaDrain(injuries: Injury[]): number {
+  let drain = 0;
+  for (const inj of injuries) {
+    if (inj.type === 'body') {
+      drain += inj.severity === 'minor' ? 3 : 6;
+    }
+  }
+  return drain;
+}
+
+/** 큰 피해를 받았을 때 부상 발생 여부를 결정 */
+export function rollInjury(damageTaken: number, playerMaxHp: number, existingInjuries: Injury[]): Injury | null {
+  if (playerMaxHp <= 0) return null;
+
+  // 모든 부위가 이미 중상이면 추가 부상 없음
+  const allMajor = ['arm', 'leg', 'body'].every(t =>
+    existingInjuries.some(i => i.type === t && i.severity === 'major')
+  );
+  if (allMajor) return null;
+
+  const ratio = damageTaken / playerMaxHp;
+  let chance = 0;
+  if (ratio >= 0.50) chance = 0.60;
+  else if (ratio >= 0.25) chance = 0.30;
+  else return null;
+
+  if (Math.random() >= chance) return null;
+
+  // 부상 유형: 현재 부상이 없는 부위 우선
+  const types: InjuryType[] = ['arm', 'leg', 'body'];
+  const uninjured = types.filter(t => !existingInjuries.some(i => i.type === t));
+  const candidates = uninjured.length > 0 ? uninjured : types;
+  const type = candidates[Math.floor(Math.random() * candidates.length)];
+
+  // 같은 부위 이미 부상 시 severity 업그레이드
+  const existing = existingInjuries.find(i => i.type === type);
+  const severity: InjurySeverity = existing ? 'major' : 'minor';
+
+  return { type, severity };
 }
 
 export function getStaminaDelta(action: ActionType): number {
@@ -286,9 +342,22 @@ export interface TurnResult {
   newEnemyRow:      number;
   playerRowMiss:    boolean;
   enemyRowMiss:     boolean;
+  newEnemyEffects?: StatusEffect[];  // 이번 턴으로 적에게 걸리는 효과
+  newPlayerEffects?: StatusEffect[]; // 이번 턴으로 플레이어에게 걸리는 효과
+  bonusStamina?: number;             // 뒤로 베기 완벽 카운터 등 스테미너 보너스
+  newPlayerInjury?: Injury;
 }
 
 // ── Structural types ─────────────────────────────────────────
+export type EquipmentTag =
+  | 'fire'
+  | 'ice'
+  | 'dark'
+  | 'wind'
+  | 'ranged'
+  | 'heavy'
+  | 'swift';
+
 export interface ElementStats {
   fire: number; water: number; wind: number; earth: number; dark: number;
 }
@@ -297,6 +366,7 @@ export interface Equipment {
   id: string; name: string; type: 'weapon' | 'armor';
   stats: Partial<Character['stats']>; description: string;
   range?: number;
+  tags?: EquipmentTag[];
 }
 
 export interface Item {
@@ -310,6 +380,7 @@ export interface Item {
 export interface Title {
   id: TitleId; name: string; condition: string;
   bonus: Partial<Character['stats']>; equipped: boolean;
+  tags?: EquipmentTag[];
 }
 
 export interface EnemyAbility {
@@ -335,13 +406,55 @@ export interface Character {
   titles: Title[];
   equippedTitle: TitleId | null;
   abilities?: EnemyAbility[];
+  activeEffects?: StatusEffect[];
+  injuries?: Injury[];
+  phase2Triggered?: boolean; // 보스 왕 2페이즈 전용
+  bossPattern?: 'wrath' | 'riposte' | 'judge' | 'king';
   isLegacy?: boolean;
   isBoss?: boolean;
   actionWeights?: Record<ActionType, number>;
 }
 
+export type FloorEventType = 'shelter' | 'merchant' | 'ruins' | 'oath';
+
+export interface FloorEventChoice {
+  id: string;
+  label: string;
+  description: string;
+  risk?: string;
+  // WARNING: FloorEvent is NOT JSON-serializable — apply functions will be lost on JSON.stringify/parse. Regenerate on load.
+  apply: (player: Character) => Character;
+}
+
+export interface FloorEvent {
+  type: FloorEventType;
+  title: string;
+  narrative: string;
+  choices: FloorEventChoice[];
+}
+
 // 층별 유령 저장 타입 (전체 게임 공유)
 export type FloorGhosts = Record<number, Character[]>;
+
+export type StatusEffectType =
+  | 'stamina_drain'   // 화염 쇄도: 다음 턴 적 스테미너 -5
+  | 'movement_lock'   // 암흑 속박: 다음 턴 적 이동 불가
+  | 'agility_debuff'  // 빙결 창: 적 agility 30% 감소 (1턴)
+  | 'extra_speed_die'; // 번개 일격: 다음 속도 주사위 +1
+
+export interface StatusEffect {
+  type: StatusEffectType;
+  duration: number; // 남은 턴 수 (1 = 다음 턴 적용 후 소멸)
+  value: number;    // 효과 크기
+}
+
+export type InjuryType = 'arm' | 'leg' | 'body';
+export type InjurySeverity = 'minor' | 'major';
+
+export interface Injury {
+  type: InjuryType;
+  severity: InjurySeverity;
+}
 
 export interface FloatingText {
   id: string; text: string;
@@ -391,6 +504,7 @@ export interface EnemyTemplate {
   baseStats: Character['stats']; baseHp: number; baseMp: number;
   actionWeights: Record<ActionType, number>; description: string;
   weaponRange: number;
+  bossPattern?: 'wrath' | 'riposte' | 'judge' | 'king';
 }
 
 export const ENEMY_TEMPLATES: EnemyTemplate[] = [
@@ -449,6 +563,7 @@ export const ENEMY_TEMPLATES: EnemyTemplate[] = [
     actionWeights:{'공격':40,'이동':20,'방어':20,'마법 사용':20,'아이템 사용':0},
     description:'탑을 지키는 검사 대장',
     weaponRange: 3,
+    bossPattern: 'wrath',
   },
   {
     id:'elder_boss', name:'검사 원로', minFloor:10, maxFloor:99, isBoss:true,
@@ -457,6 +572,7 @@ export const ENEMY_TEMPLATES: EnemyTemplate[] = [
     actionWeights:{'공격':25,'이동':20,'방어':25,'마법 사용':30,'아이템 사용':0},
     description:'탑의 수호자 검사 원로',
     weaponRange: 3,
+    bossPattern: 'riposte',
   },
   {
     id:'executioner', name:'검사 집행관', minFloor:8, maxFloor:15, isBoss:false,
@@ -474,40 +590,66 @@ export const ENEMY_TEMPLATES: EnemyTemplate[] = [
     description:'검과 마법을 동시에 다루는 마도사',
     weaponRange: 4,
   },
+  {
+    id: 'judge_boss', name: '검사 심판관', minFloor: 15, maxFloor: 29, isBoss: true,
+    baseStats: {
+      strength: 88, agility: 70,
+      elements: { fire: 25, water: 25, wind: 25, earth: 25, dark: 40 },
+      armor: 42, critChance: 32,
+    },
+    baseHp: 400, baseMp: 160,
+    actionWeights: { '공격': 35, '이동': 15, '방어': 20, '마법 사용': 30, '아이템 사용': 0 },
+    description: '플레이어 패턴을 분석해 완벽히 카운터하는 심판관',
+    weaponRange: 3,
+    bossPattern: 'judge',
+  },
+  {
+    id: 'king_boss', name: '검사 왕', minFloor: 30, maxFloor: 99, isBoss: true,
+    baseStats: {
+      strength: 110, agility: 85,
+      elements: { fire: 35, water: 35, wind: 35, earth: 35, dark: 35 },
+      armor: 50, critChance: 38,
+    },
+    baseHp: 520, baseMp: 200,
+    actionWeights: { '공격': 30, '이동': 15, '방어': 25, '마법 사용': 30, '아이템 사용': 0 },
+    description: '2페이즈 보스 — HP 0 도달 시 절반 HP로 부활',
+    weaponRange: 3,
+    bossPattern: 'king',
+  },
 ];
 
 export const EQUIPMENT_POOL: Equipment[] = [
-  { id:'iron_sword',   name:'철제 검',       type:'weapon', stats:{strength:10}, description:'기본 철제 검', range:2 },
-  { id:'swift_boots',  name:'신속의 장화',   type:'armor',  stats:{agility:12},  description:'발이 빨라진다' },
+  { id:'iron_sword',   name:'철제 검',       type:'weapon', stats:{strength:10}, description:'기본 철제 검', range:2, tags: [] },
+  { id:'swift_boots',  name:'신속의 장화',   type:'armor',  stats:{agility:12},  description:'발이 빨라진다', tags: ['swift'] },
   { id:'flame_blade',  name:'화염 도검',     type:'weapon',
-    stats:{strength:8, elements:{fire:15,water:0,wind:0,earth:0,dark:0}}, description:'불꽃이 깃든 검', range:2 },
-  { id:'throwing_knife', name:'투척 단검',   type:'weapon', stats:{strength:6, agility:4}, description:'원거리 공격용 단검', range:4 },
-  { id:'iron_shield',  name:'철제 방패',     type:'armor',  stats:{armor:15},    description:'강인한 방어력' },
+    stats:{strength:8, elements:{fire:15,water:0,wind:0,earth:0,dark:0}}, description:'불꽃이 깃든 검', range:2, tags: ['fire'] },
+  { id:'throwing_knife', name:'투척 단검',   type:'weapon', stats:{strength:6, agility:4}, description:'원거리 공격용 단검', range:4, tags: ['ranged', 'swift'] },
+  { id:'iron_shield',  name:'철제 방패',     type:'armor',  stats:{armor:15},    description:'강인한 방어력', tags: ['heavy'] },
   { id:'shadow_cloak', name:'그림자 망토',   type:'armor',
-    stats:{agility:8, elements:{fire:0,water:0,wind:0,earth:0,dark:10}}, description:'암흑 속에 숨는다' },
+    stats:{agility:8, elements:{fire:0,water:0,wind:0,earth:0,dark:10}}, description:'암흑 속에 숨는다', tags: ['dark', 'swift'] },
 ];
 
 export const EQUIPMENT_POOL_T2: Equipment[] = [
-  { id:'steel_sword',  name:'강철 대검',     type:'weapon', stats:{strength:18}, description:'묵직한 강철 대검', range:2 },
-  { id:'agile_armor',  name:'경량 갑옷',     type:'armor',  stats:{agility:14, armor:6}, description:'빠르고 가벼운 갑옷' },
+  { id:'steel_sword',  name:'강철 대검',     type:'weapon', stats:{strength:18}, description:'묵직한 강철 대검', range:2, tags: ['heavy'] },
+  { id:'agile_armor',  name:'경량 갑옷',     type:'armor',  stats:{agility:14, armor:6}, description:'빠르고 가벼운 갑옷', tags: ['swift'] },
   { id:'frost_blade',  name:'빙결 도검',     type:'weapon',
-    stats:{strength:10, elements:{fire:0,water:22,wind:0,earth:0,dark:0}}, description:'얼음 기운이 깃든 검', range:2 },
-  { id:'heavy_shield', name:'중갑 방패',     type:'armor',  stats:{armor:22},    description:'두껍고 무거운 방패' },
+    stats:{strength:10, elements:{fire:0,water:22,wind:0,earth:0,dark:0}}, description:'얼음 기운이 깃든 검', range:2, tags: ['ice'] },
+  { id:'heavy_shield', name:'중갑 방패',     type:'armor',  stats:{armor:22},    description:'두껍고 무거운 방패', tags: ['heavy'] },
   { id:'wind_cloak',   name:'폭풍 망토',     type:'armor',
-    stats:{agility:12, elements:{fire:0,water:0,wind:18,earth:0,dark:0}}, description:'바람을 타는 망토' },
+    stats:{agility:12, elements:{fire:0,water:0,wind:18,earth:0,dark:0}}, description:'바람을 타는 망토', tags: ['wind', 'swift'] },
   { id:'thunder_blade',name:'뇌전 도검',     type:'weapon',
-    stats:{strength:12, elements:{fire:0,water:0,wind:12,earth:0,dark:8}}, description:'번개가 깃든 검', range:2 },
+    stats:{strength:12, elements:{fire:0,water:0,wind:12,earth:0,dark:8}}, description:'번개가 깃든 검', range:2, tags: ['wind', 'dark'] },
 ];
 
 export const EQUIPMENT_POOL_T3: Equipment[] = [
-  { id:'legendary_sword', name:'전설의 검',  type:'weapon', stats:{strength:28}, description:'탑의 전설로 불리는 검', range:3 },
-  { id:'master_armor',    name:'마스터 갑주',type:'armor',  stats:{armor:28, agility:10}, description:'최상급 장인의 작품' },
+  { id:'legendary_sword', name:'전설의 검',  type:'weapon', stats:{strength:28}, description:'탑의 전설로 불리는 검', range:3, tags: [] },
+  { id:'master_armor',    name:'마스터 갑주',type:'armor',  stats:{armor:28, agility:10}, description:'최상급 장인의 작품', tags: ['heavy'] },
   { id:'arcane_staff',    name:'비전 지팡이',type:'weapon',
-    stats:{strength:6, elements:{fire:18,water:18,wind:18,earth:18,dark:18}}, description:'모든 속성이 깃든 지팡이', range:5 },
+    stats:{strength:6, elements:{fire:18,water:18,wind:18,earth:18,dark:18}}, description:'모든 속성이 깃든 지팡이', range:5, tags: ['fire','ice','wind','dark'] },
   { id:'crimson_blade',   name:'홍염 대검',  type:'weapon',
-    stats:{strength:22, elements:{fire:20,water:0,wind:0,earth:0,dark:0}}, description:'붉은 불꽃이 타오르는 대검', range:2 },
+    stats:{strength:22, elements:{fire:20,water:0,wind:0,earth:0,dark:0}}, description:'붉은 불꽃이 타오르는 대검', range:2, tags: ['fire'] },
   { id:'void_armor',      name:'허공의 갑주',type:'armor',
-    stats:{armor:20, agility:14, elements:{fire:0,water:0,wind:0,earth:0,dark:20}}, description:'어둠과 하나된 갑옷' },
+    stats:{armor:20, agility:14, elements:{fire:0,water:0,wind:0,earth:0,dark:20}}, description:'어둠과 하나된 갑옷', tags: ['dark', 'swift'] },
 ];
 
 export function getRewardEquipment(floor: number): Equipment {
@@ -609,6 +751,171 @@ export function getMagicHint(floor: number, player: Character): string {
   return '마법 시전 후 1턴 대기';
 }
 
+// ── Floor Events ─────────────────────────────────────────────
+export function shouldTriggerEvent(floor: number): boolean {
+  if (floor <= 1) return false;
+  if (floor % 5 === 0) return false; // 보스 층에서는 이벤트 없음
+  return floor % 3 === 0;
+}
+
+export function generateFloorEvent(floor: number, player: Character): FloorEvent {
+  const hpLow = player.hp / player.maxHp < 0.4;
+  const types: FloorEventType[] = hpLow
+    ? ['shelter', 'shelter', 'merchant', 'ruins']
+    : ['shelter', 'merchant', 'ruins', 'oath'];
+
+  const type = types[Math.floor(Math.random() * types.length)];
+
+  switch (type) {
+    case 'shelter':
+      return {
+        type: 'shelter',
+        title: '검사의 쉼터',
+        narrative: '탑 안에 마련된 작은 쉼터를 발견했다. 잠시 쉬어가며 상처를 치료할 수 있다.',
+        choices: [
+          {
+            id: 'rest',
+            label: '쉬어 가기',
+            description: `HP ${Math.floor(player.maxHp * 0.3)} 회복`,
+            apply: (p) => ({ ...p, hp: Math.min(p.maxHp, p.hp + Math.floor(p.maxHp * 0.3)) }),
+          },
+          {
+            id: 'train',
+            label: '단련하기',
+            description: 'HP 회복 없음. 대신 strength +3',
+            apply: (p) => ({ ...p, stats: { ...p.stats, strength: p.stats.strength + 3 } }),
+          },
+          {
+            id: 'heal_injury',
+            label: '부상 치료',
+            description: '가장 심한 부상 1개를 치료',
+            apply: (p) => {
+              if (!p.injuries || p.injuries.length === 0) return p;
+              const majorIdx = p.injuries.findIndex(i => i.severity === 'major');
+              const idx = majorIdx >= 0 ? majorIdx : 0;
+              const newInjuries = p.injuries.filter((_, i) => i !== idx);
+              return { ...p, injuries: newInjuries };
+            },
+          },
+          {
+            id: 'skip',
+            label: '그냥 지나치기',
+            description: '아무 효과 없음',
+            apply: (p) => p,
+          },
+        ],
+      };
+
+    case 'merchant':
+      return {
+        type: 'merchant',
+        title: '행상 검사',
+        narrative: '낡은 짐을 짊어진 검사가 길목에 앉아 있다. HP를 지불하고 물건을 살 수 있다.',
+        choices: [
+          {
+            id: 'buy_agility',
+            label: `HP ${Math.floor(player.maxHp * 0.15)} 지불 → agility +8`,
+            description: '신속의 비약',
+            risk: `HP ${Math.floor(player.maxHp * 0.15)} 소모`,
+            apply: (p) => ({
+              ...p,
+              hp: Math.max(1, p.hp - Math.floor(p.maxHp * 0.15)),
+              stats: { ...p.stats, agility: p.stats.agility + 8 },
+            }),
+          },
+          {
+            id: 'buy_armor',
+            label: `HP ${Math.floor(player.maxHp * 0.15)} 지불 → armor +10`,
+            description: '단단한 비늘 갑옷 조각',
+            risk: `HP ${Math.floor(player.maxHp * 0.15)} 소모`,
+            apply: (p) => ({
+              ...p,
+              hp: Math.max(1, p.hp - Math.floor(p.maxHp * 0.15)),
+              stats: { ...p.stats, armor: Math.min(70, p.stats.armor + 10) },
+            }),
+          },
+          {
+            id: 'skip',
+            label: '그냥 지나치기',
+            description: '거래 안 함',
+            apply: (p) => p,
+          },
+        ],
+      };
+
+    case 'ruins':
+      return {
+        type: 'ruins',
+        title: '검사의 폐허',
+        narrative: '오래된 전투 흔적이 남아 있는 폐허다. 위험한 유물이 발견됐지만 효과가 불분명하다.',
+        choices: [
+          {
+            id: 'gamble_strength',
+            label: '붉은 검 조각을 잡는다',
+            description: '50% 확률: strength +10 / 50% 확률: HP -20%',
+            risk: '50% 확률로 HP 감소',
+            apply: (p) => Math.random() < 0.5
+              ? { ...p, stats: { ...p.stats, strength: p.stats.strength + 10 } }
+              : { ...p, hp: Math.max(1, Math.floor(p.hp * 0.8)) },
+          },
+          {
+            id: 'gamble_crit',
+            label: '검은 수정을 삼킨다',
+            description: '60% 확률: critChance +12 / 40% 확률: 즉시 컨디션 최악',
+            risk: '40% 확률로 컨디션 최악',
+            apply: (p) => Math.random() < 0.6
+              ? { ...p, stats: { ...p.stats, critChance: p.stats.critChance + 12 } }
+              : { ...p, condition: 'terrible' as Condition },
+          },
+          {
+            id: 'skip',
+            label: '무시하고 지나친다',
+            description: '안전하게 통과',
+            apply: (p) => p,
+          },
+        ],
+      };
+
+    case 'oath':
+    default:
+      return {
+        type: 'oath',
+        title: '검사의 맹세',
+        narrative: '탑의 제단 앞에 섰다. 고통스러운 맹세를 통해 더 강해질 수 있다.',
+        choices: [
+          {
+            id: 'oath_strength',
+            label: `힘의 맹세`,
+            description: `strength +${Math.floor(floor * 0.8) + 5}. 대신 현재 HP 절반으로`,
+            risk: 'HP 50% 감소',
+            apply: (p) => ({
+              ...p,
+              hp: Math.max(1, Math.floor(p.hp * 0.5)),
+              stats: { ...p.stats, strength: p.stats.strength + Math.floor(floor * 0.8) + 5 },
+            }),
+          },
+          {
+            id: 'oath_agility',
+            label: `신속의 맹세`,
+            description: `agility +${Math.floor(floor * 0.6) + 4}. 대신 현재 HP 절반으로`,
+            risk: 'HP 50% 감소',
+            apply: (p) => ({
+              ...p,
+              hp: Math.max(1, Math.floor(p.hp * 0.5)),
+              stats: { ...p.stats, agility: p.stats.agility + Math.floor(floor * 0.6) + 4 },
+            }),
+          },
+          {
+            id: 'skip',
+            label: '맹세를 거부한다',
+            description: '아무 변화 없음',
+            apply: (p) => p,
+          },
+        ],
+      };
+  }
+}
+
 // ── Dice ─────────────────────────────────────────────────────
 export const DICE_FACE = ['','⚀','⚁','⚂','⚃','⚄','⚅'];
 
@@ -617,6 +924,11 @@ export function rollDice(count: number): number[] {
 }
 
 function rollContest(playerCount: number, enemyCount: number): DiceContest {
+  if (enemyCount === 0) {
+    const playerRolls = rollDice(playerCount);
+    const playerTotal = playerRolls.reduce((a, b) => a + b, 0);
+    return { playerRolls, enemyRolls: [], playerTotal, enemyTotal: 0, winner: 'player' };
+  }
   const playerRolls = rollDice(playerCount);
   const enemyRolls  = rollDice(enemyCount);
   const playerTotal = playerRolls.reduce((a, b) => a + b, 0);
@@ -651,11 +963,28 @@ export function resolveTurn(
   playerPos: number, enemyPos: number,
   playerRow: number = COMBAT_ROW_DEFAULT,
   enemyRow:  number = COMBAT_ROW_DEFAULT,
+  playerMagicBonus: number = 0,
+  playerRangedBonus: number = 0,
 ): TurnResult {
   const distance = enemyPos - playerPos;
+
+  // ── 활성 상태효과 확인 ──────────────────────────────────────
+  const enemyMoveLocked = (enemy.activeEffects ?? []).some(e => e.type === 'movement_lock');
+  const enemyAgiDebuffed = (enemy.activeEffects ?? []).some(e => e.type === 'agility_debuff');
+  const playerExtraSpeedDie = (player.activeEffects ?? []).some(e => e.type === 'extra_speed_die');
+
   const quality = getMatchQuality(playerSub, intent.subAction);
   const playerStats = getEffectiveStats(player);
   const enemyStats = getEffectiveStats(enemy);
+
+  // 부상 페널티 적용
+  const playerInjuries = player.injuries ?? [];
+  const injStrMult = getInjuryStatMult(playerInjuries, 'strength');
+  const injAgiMult = getInjuryStatMult(playerInjuries, 'agility');
+  if (injStrMult < 1 || injAgiMult < 1) {
+    playerStats.strength  = Math.max(1, Math.floor(playerStats.strength  * injStrMult));
+    playerStats.agility   = Math.max(1, Math.floor(playerStats.agility   * injAgiMult));
+  }
   const playerWeaponRange = player.weaponRange ?? 1;
   const enemyWeaponRange = enemy.weaponRange ?? 1;
   const playerItemRange = playerMain === '아이템 사용'
@@ -678,8 +1007,12 @@ export function resolveTurn(
 
   // ── 1. 속도 결정 주사위 ──────────────────────────────────────
   // 민첩 상대 비율로 주사위 수 결정 (스테미나 감소 시 effective agility가 이미 낮아짐)
-  const pSpdDice = getDiceCount(playerStats.agility, enemyStats.agility);
-  const eSpdDice = getDiceCount(enemyStats.agility, playerStats.agility);
+  const pSpdDiceBase = getDiceCount(playerStats.agility, enemyStats.agility); // 적 디버프는 플레이어 주사위에 도움 안 됨
+  const pSpdDice = Math.min(4, pSpdDiceBase + (playerExtraSpeedDie ? 1 : 0));
+  const eSpdDice = enemyMoveLocked ? 0
+    : getDiceCount(
+        enemyAgiDebuffed ? Math.floor(enemyStats.agility * 0.7) : enemyStats.agility, // 디버프로 적 자신 주사위 감소
+        playerStats.agility);
   const speedContest = rollContest(pSpdDice, eSpdDice);
 
   let pSpeedMult = 1.0, eSpeedMult = 1.0;
@@ -748,12 +1081,15 @@ export function resolveTurn(
       // 마법: 성공 시 무조건 피격 — 속도/힘싸움 배율 무시
       if (magicMult > 0) {
         const sp = Math.floor(playerStats.strength * 0.7 + (player.stats.elements.fire + player.stats.elements.dark) * 0.3);
-        damageDealt = Math.max(1, Math.floor(sp * magicMult * pDistMult * (1 - eArmorRed)));
+        const magicSynergyMult = 1 + playerMagicBonus / 100;
+        damageDealt = Math.max(1, Math.floor(sp * magicMult * pDistMult * magicSynergyMult * (1 - eArmorRed)));
       }
     } else if (playerSub === '단검 던지기') {
-      damageDealt = Math.max(1, Math.floor(playerStats.strength * 0.9 * pFinalMult * (1 - eArmorRed)));
+      const rangedSynergyMult = 1 + playerRangedBonus / 100;
+      damageDealt = Math.max(1, Math.floor(playerStats.strength * 0.9 * pFinalMult * rangedSynergyMult * (1 - eArmorRed)));
     } else if (playerSub === '강화 단검') {
-      damageDealt = Math.max(1, Math.floor(playerStats.strength * 1.2 * pFinalMult * (1 - eArmorRed)));
+      const rangedSynergyMult = 1 + playerRangedBonus / 100;
+      damageDealt = Math.max(1, Math.floor(playerStats.strength * 1.2 * pFinalMult * rangedSynergyMult * (1 - eArmorRed)));
     } else if (playerSub === '폭발 물약') {
       damageDealt = Math.max(1, Math.floor(32 * pFinalMult));
     } else {
@@ -858,6 +1194,16 @@ export function resolveTurn(
       message += ' — 플레이어가 밀려났다!';
     }
   }
+  // 바람 쇄도 성공 시 즉시 적 1칸 밀어냄
+  if (playerMain === '마법 사용' && playerSub === '바람 쇄도' && magicMult > 0 && damageDealt > 0) {
+    finalEnemyPos = Math.min(5, finalEnemyPos + 1);
+    message += ' — 바람에 밀려났다!';
+  }
+  // 뒤로 베기: 공격 성공 시 적도 1칸 추가 밀어냄
+  if (playerSub === '뒤로 베기' && damageDealt > 0) {
+    finalEnemyPos = Math.min(5, finalEnemyPos + 1);
+    message += ' — 뒤로 베기로 적을 밀어냈다!';
+  }
   const newDistance = finalEnemyPos - finalPlayerPos;
 
   // ── 행(Y축) 이동 및 miss 판정 ────────────────────────────────
@@ -874,17 +1220,69 @@ export function resolveTurn(
     message += message ? ' (행 이동으로 회피!)' : '행 이동으로 회피!';
   }
 
+  // 부상 발생 체크
+  const newPlayerInjury = damageTaken > 0
+    ? rollInjury(damageTaken, player.maxHp, playerInjuries) ?? undefined
+    : undefined;
+
   const base = { quality, baseOutcome: 'draw', speedContest, strengthContest, magicRoll,
     isCritical, newDistance, newPlayerPos: finalPlayerPos, newEnemyPos: finalEnemyPos,
     newPlayerRow, newEnemyRow, playerRowMiss, enemyRowMiss };
 
+  // 마법 성공 시 스펠별 부가효과 생성
+  let newEnemyEffects: StatusEffect[] | undefined;
+  let newPlayerEffects: StatusEffect[] | undefined;
+  let spellHealAmount: number | undefined;
+  const bonusStamina = (playerSub === '뒤로 베기' && quality === 'perfect') ? 5 : 0;
+
+  // 바람 쇄도의 위치 밀어냄은 위 position 블록에서 처리됨 — 여기서는 별도 효과 없음
+  if (playerMain === '마법 사용' && magicMult > 0) {
+    switch (playerSub) {
+      case '화염 쇄도':
+        newEnemyEffects = [{ type: 'stamina_drain', duration: 1, value: 5 }];
+        message += ' 🔥(화상)';
+        break;
+      case '암흑 속박':
+        newEnemyEffects = [{ type: 'movement_lock', duration: 1, value: 0 }];
+        message += ' ⛓(속박)';
+        break;
+      case '빙결 창':
+        newEnemyEffects = [{ type: 'agility_debuff', duration: 1, value: 0.30 }];
+        message += ' ❄(빙결)';
+        break;
+      case '번개 일격':
+        newPlayerEffects = [{ type: 'extra_speed_die', duration: 1, value: 1 }];
+        message += ' ⚡(가속)';
+        break;
+      case '회복술':
+        spellHealAmount = 15; // 회복술 기본 회복량: 마법은 발동 조건(주사위 성공) 있어 포션(25)보다 낮게 설계
+        break;
+    }
+  }
+
   if (playerMain === '아이템 사용' && playerSub === '치유 물약') {
-    return { ...base, damageTaken, damageDealt, healAmount: 25, message: '치유 물약으로 회복' };
+    return { ...base, damageTaken, damageDealt, healAmount: 25,
+      newEnemyEffects, newPlayerEffects, bonusStamina: undefined,
+      newPlayerInjury: undefined,
+      message: '치유 물약으로 회복' };
   }
   if (playerMain === '아이템 사용' && playerSub === '대형 치유 물약') {
-    return { ...base, damageTaken, damageDealt, healAmount: 50, message: '대형 치유 물약으로 대량 회복!' };
+    return { ...base, damageTaken, damageDealt, healAmount: 50,
+      newEnemyEffects, newPlayerEffects, bonusStamina: undefined,
+      newPlayerInjury: undefined,
+      message: '대형 치유 물약으로 대량 회복!' };
   }
-  return { ...base, damageTaken, damageDealt, message };
+  return {
+    ...base,
+    damageTaken,
+    damageDealt,
+    healAmount: spellHealAmount,
+    newEnemyEffects,
+    newPlayerEffects,
+    bonusStamina,
+    newPlayerInjury,
+    message,
+  };
 }
 
 // ── Intent generation ────────────────────────────────────────
@@ -903,6 +1301,7 @@ export interface AIContext {
   playerMagicAvailable?: boolean;
   playerItemAvailable?: boolean;
   turnCount?: number;
+  bossPattern?: 'wrath' | 'riposte' | 'judge' | 'king';
 }
 
 function biasedProbs<T extends string>(
@@ -993,6 +1392,29 @@ export function generateEnemyIntent(
     if (!playerItemAvailable) {
       w['공격'] = (w['공격'] ?? 0) + 5;
     }
+
+    // ── 보스 전용 패턴 ─────────────────────────────────────
+    if (ctx.bossPattern === 'wrath' && enemyHpRatio < 0.5) {
+      // 분노: HP 50% 이하에서 공격 가중치 2배
+      w['공격'] = (w['공격'] ?? 0) * 2;
+      w['마법 사용'] = (w['마법 사용'] ?? 0) + 20;
+    }
+    if (ctx.bossPattern === 'riposte' && ctx.playerLastMain === '방어') {
+      // 반격: 플레이어가 방어하면 우회 행동
+      w['이동']     = (w['이동']     ?? 0) + 60;
+      w['마법 사용'] = (w['마법 사용'] ?? 0) + 40;
+      w['공격'] = Math.max(5, (w['공격'] ?? 0) - 40);
+    }
+    if (ctx.bossPattern === 'judge' && ctx.playerLastMain) {
+      // 심판관: 플레이어 마지막 메인 액션의 카운터
+      const judgeCounter: Partial<Record<ActionType, ActionType>> = {
+        '공격': '방어', '마법 사용': '이동', '이동': '공격',
+        '방어': '마법 사용', '아이템 사용': '공격',
+      };
+      const counter = judgeCounter[ctx.playerLastMain];
+      if (counter) w[counter] = (w[counter] ?? 0) + 80;
+    }
+    // 왕 패턴: 2페이즈는 컴포넌트에서 처리
   }
 
   const mainAction = rollActionFromWeights(w);
@@ -1138,7 +1560,12 @@ export function generateEnemy(floor: number, legacyCharacters: Character[], floo
     };
   }
 
-  const eligible = ENEMY_TEMPLATES.filter(t => t.minFloor <= floor && (t.isBoss ? floor % 5 === 0 : !t.isBoss));
+  const eligible = ENEMY_TEMPLATES.filter(t => {
+    if (t.maxFloor < floor) return false;
+    if (t.minFloor > floor) return false;
+    if (t.isBoss) return floor % 5 === 0;
+    return true;
+  });
   const template  = eligible[Math.floor(Math.random() * eligible.length)] ?? ENEMY_TEMPLATES[0];
   const scale     = 1 + (floor - 1) * 0.15;
   const chosenAbilities = shuffleArray(ENEMY_ABILITY_POOL).slice(0, Math.min(floor, ENEMY_ABILITY_POOL.length));
@@ -1187,17 +1614,20 @@ export function generateEnemy(floor: number, legacyCharacters: Character[], floo
     weaponRange: enemyRange,
     titles: [], equippedTitle: null, isLegacy: false,
     isBoss: template.isBoss,
+    bossPattern: template.bossPattern,
     actionWeights: adjustedWeights,
     abilities: chosenAbilities,
   };
 }
 
-export function createPlayer(highScore: number, name: string = '검사'): Character {
+export type StartBuild = 'default' | 'assassin' | 'magic_start' | 'arcane' | 'tank';
+
+export function createPlayer(highScore: number, name: string = '검사', build: StartBuild = 'default'): Character {
   const bonus = Math.floor(highScore * 0.1);
   const rand = (base: number, variance: number) =>
     base + bonus + Math.floor(Math.random() * variance * 2) - variance;
   const startSpell = MAGIC_SPELL_POOL[Math.floor(Math.random() * MAGIC_SPELL_POOL.length)];
-  return {
+  const base: Character = {
     id: 'player', name, level: 1,
     condition: 'normal',
     stats: {
@@ -1219,8 +1649,198 @@ export function createPlayer(highScore: number, name: string = '검사'): Charac
     titles: [{ ...(TITLES_DATA.find(t => t.id === 'novice') ?? TITLES_DATA[0]), equipped: true }],
     equippedTitle: 'novice',
   };
+
+  switch (build) {
+    case 'assassin':
+      return {
+        ...base,
+        stats: { ...base.stats, agility: base.stats.agility + 10 },
+        inventory: [
+          { id:'healing_potion', name:'치유 물약', kind:'potion', description:'체력 25 회복', heal:25 },
+          { id:'throwing_dagger', name:'단검 던지기', kind:'throwing', description:'원거리 단검 던지기', damage:12, range:4 },
+          { id:'throwing_dagger2', name:'단검 던지기', kind:'throwing', description:'원거리 단검 던지기', damage:12, range:4 },
+        ],
+      };
+    case 'magic_start': {
+      const otherSpells = MAGIC_SPELL_POOL.filter(s => s !== base.magicSlots[0]);
+      const startSpell2 = otherSpells[Math.floor(Math.random() * otherSpells.length)];
+      return { ...base, magicSlots: [base.magicSlots[0], startSpell2] as typeof base.magicSlots };
+    }
+    case 'arcane':
+      return {
+        ...base,
+        mp: 70, maxMp: 70,
+        stats: { ...base.stats, strength: Math.max(5, base.stats.strength - 5) },
+      };
+    case 'tank':
+      return {
+        ...base,
+        hp: 110, maxHp: 110,
+        stats: {
+          ...base.stats,
+          armor: Math.min(70, base.stats.armor + 15),
+          agility: Math.max(3, base.stats.agility - 8),
+        },
+      };
+    default:
+      return base;
+  }
 }
 
 export const DEFAULT_ACTION_WEIGHTS: Record<ActionType, number> = {
   '공격': 40, '이동': 20, '방어': 20, '마법 사용': 20, '아이템 사용': 0,
 };
+
+export type UnlockKey =
+  | 'unlock_assassin'
+  | 'unlock_magic_start'
+  | 'unlock_arcane'
+  | 'unlock_tank'
+  | 'unlock_hard_mode';
+
+export interface UnlockCondition {
+  key: UnlockKey;
+  label: string;
+  description: string;
+  hint: string;
+}
+
+export const UNLOCK_CONDITIONS: UnlockCondition[] = [
+  {
+    key: 'unlock_assassin',
+    label: '암살자 빌드',
+    description: '시작 시 agility +10, 단검 던지기 2개로 시작',
+    hint: '5층을 돌파하면 해금',
+  },
+  {
+    key: 'unlock_magic_start',
+    label: '이중 마법사 빌드',
+    description: '시작 시 마법 슬롯 2개 (랜덤)',
+    hint: '첫 보스를 처치하면 해금',
+  },
+  {
+    key: 'unlock_arcane',
+    label: '비전술사 빌드',
+    description: '시작 시 MP 70, 마법 쿨다운 0, strength -5',
+    hint: '10층을 돌파하면 해금',
+  },
+  {
+    key: 'unlock_tank',
+    label: '철벽 기사 빌드',
+    description: '시작 시 armor +15, HP +20, agility -8',
+    hint: '20층을 돌파하면 해금',
+  },
+  {
+    key: 'unlock_hard_mode',
+    label: '하드 모드',
+    description: '모든 적 스탯 +20%. 대신 보상 장비 티어 +1',
+    hint: '보스를 5마리 처치하면 해금',
+  },
+];
+
+export interface SynergyBonus {
+  strength?: number;
+  agility?: number;
+  armor?: number;
+  critChance?: number;
+  magicDamageBonus?: number;
+  rangedDamageBonus?: number;
+}
+
+export interface SynergyDefinition {
+  id: string;
+  name: string;
+  description: string;
+  requiredTag: EquipmentTag;
+  minCount: number;
+  bonus: SynergyBonus;
+}
+
+export const SYNERGY_DEFINITIONS: SynergyDefinition[] = [
+  {
+    id: 'fire_mastery',
+    name: '화염 지배자',
+    description: '화염 계통 장비/칭호 2개 이상 → 마법 피해 +25%',
+    requiredTag: 'fire',
+    minCount: 2,
+    bonus: { magicDamageBonus: 25 },
+  },
+  {
+    id: 'swift_dancer',
+    name: '신속의 무희',
+    description: '민첩 계통 장비/칭호 2개 이상 → agility +10, 원거리 투척 피해 +15%',
+    requiredTag: 'swift',
+    minCount: 2,
+    bonus: { agility: 10, rangedDamageBonus: 15 },
+  },
+  {
+    id: 'iron_fortress',
+    name: '철의 요새',
+    description: '중장갑 계통 장비 2개 이상 → armor +12, strength +5',
+    requiredTag: 'heavy',
+    minCount: 2,
+    bonus: { armor: 12, strength: 5 },
+  },
+  {
+    id: 'dark_assassin',
+    name: '암흑 자객',
+    description: '암흑 계통 장비/칭호 2개 이상 → critChance +15',
+    requiredTag: 'dark',
+    minCount: 2,
+    bonus: { critChance: 15 },
+  },
+  {
+    id: 'wind_dancer',
+    name: '바람의 춤꾼',
+    description: '바람 계통 장비/칭호 2개 이상 → agility +8, 마법 피해 +15%',
+    requiredTag: 'wind',
+    minCount: 2,
+    bonus: { agility: 8, magicDamageBonus: 15 },
+  },
+  {
+    id: 'ice_king',
+    name: '빙왕',
+    description: '냉기 계통 장비/칭호 2개 이상 → strength +8, armor +8',
+    requiredTag: 'ice',
+    minCount: 2,
+    bonus: { strength: 8, armor: 8 },
+  },
+];
+
+export function getActiveSynergies(player: Character): SynergyDefinition[] {
+  const equipTags: EquipmentTag[] = player.equipment.flatMap(e => e.tags ?? []);
+  const titleTags: EquipmentTag[] = player.titles
+    .filter(t => t.equipped)
+    .flatMap(t => t.tags ?? []);
+  const allTags = [...equipTags, ...titleTags];
+
+  return SYNERGY_DEFINITIONS.filter(syn => {
+    const count = allTags.filter(tag => tag === syn.requiredTag).length;
+    return count >= syn.minCount;
+  });
+}
+
+export function getEffectiveStatsWithSynergy(player: Character): {
+  stats: Character['stats'];
+  activeSynergies: SynergyDefinition[];
+  magicDamageBonus: number;
+  rangedDamageBonus: number;
+} {
+  const baseStats = getEffectiveStats(player);
+  const synergies = getActiveSynergies(player);
+
+  let magicDamageBonus = 0;
+  let rangedDamageBonus = 0;
+  const finalStats = { ...baseStats };
+
+  synergies.forEach(syn => {
+    if (syn.bonus.strength)   finalStats.strength   += syn.bonus.strength;
+    if (syn.bonus.agility)    finalStats.agility    += syn.bonus.agility;
+    if (syn.bonus.armor)      finalStats.armor       = Math.min(70, finalStats.armor + syn.bonus.armor);
+    if (syn.bonus.critChance) finalStats.critChance += syn.bonus.critChance;
+    if (syn.bonus.magicDamageBonus)  magicDamageBonus  += syn.bonus.magicDamageBonus;
+    if (syn.bonus.rangedDamageBonus) rangedDamageBonus += syn.bonus.rangedDamageBonus;
+  });
+
+  return { stats: finalStats, activeSynergies: synergies, magicDamageBonus, rangedDamageBonus };
+}
