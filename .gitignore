@@ -1,0 +1,22 @@
+# 릴리스 바이너리 (용량 큼)
+release/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Next.js
+swordmasters-ascent/.next/
+swordmasters-ascent/out/
+
+# Electron 빌드 결과물
+swordmasters-ascent/release_TOS/
+swordmasters-ascent/dist/
+*.exe
+*.dmg
+*.AppImage
+
+# 기타
+.env
+*.log
+tsconfig.tsbuildinfo
