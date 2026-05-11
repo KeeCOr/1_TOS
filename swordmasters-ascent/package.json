@@ -1,0 +1,61 @@
+{
+  "name": "tos-swordmasters-ascent",
+  "version": "1.5.53",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "electron": "electron .",
+    "dist": "node scripts/bump-version.js && node scripts/clean-release.js && next build && electron-builder --win portable --x64",
+    "html": "next build && node scripts/build-singlefile.js"
+  },
+  "build": {
+    "appId": "com.tos.swordmasters",
+    "productName": "T of Sword",
+    "copyright": "SwordmastersAscent",
+    "directories": {
+      "output": "../release"
+    },
+    "files": [
+      "out/**/*",
+      "electron/main.js",
+      "package.json"
+    ],
+    "win": {
+      "forceCodeSigning": false,
+      "signAndEditExecutable": false,
+      "verifyUpdateCodeSignature": false,
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "TOS_v${version}.exe"
+    }
+  },
+  "dependencies": {
+    "next": "16.2.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "electron": "^36.9.5",
+    "electron-builder": "^26.8.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}
