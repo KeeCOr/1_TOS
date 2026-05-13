@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TOS Layout Focus</title>
+  <style>
+    :root { color-scheme: dark; --bg:#08090d; --panel:#111827; --line:#2d3748; --text:#f8fafc; --muted:#94a3b8; --gold:#facc15; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; font-family:Arial, sans-serif; background:radial-gradient(circle at 50% 0%, #1e293b 0, #08090d 48%); color:var(--text); padding:36px; }
+    main { max-width:1180px; margin:0 auto; }
+    h1 { margin:0 0 10px; font-size:30px; letter-spacing:0; }
+    .subtitle { margin:0 0 28px; max-width:820px; color:var(--muted); line-height:1.65; font-size:15px; }
+    .grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:18px; }
+    .card { background:rgba(15,23,42,.78); border:1px solid var(--line); border-radius:8px; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.28); }
+    .visual { height:210px; padding:14px; background:#06070a; border-bottom:1px solid #263244; }
+    .body { padding:18px; }
+    h2 { margin:0 0 8px; font-size:18px; }
+    p { margin:0; color:#cbd5e1; line-height:1.55; font-size:14px; }
+    .stage-a { height:100%; background:#07090f; border:1px solid #293244; border-radius:8px; position:relative; overflow:hidden; }
+    .stage-a:before { content:""; position:absolute; inset:0; background:linear-gradient(90deg, rgba(0,0,0,.75), transparent 35%, transparent 65%, rgba(0,0,0,.75)); }
+    .hud { position:absolute; top:10px; width:104px; height:46px; border-radius:6px; border:1px solid #475569; background:#101827; }
+    .hud.left { left:10px; } .hud.right { right:10px; background:#261111; border-color:#7f1d1d; }
+    .duel { position:absolute; left:50%; top:44%; transform:translate(-50%,-50%); width:220px; height:92px; background:linear-gradient(135deg,#1f2937,#0f172a); border:1px solid #64748b; border-radius:8px; }
+    .actions { position:absolute; bottom:12px; left:12px; width:128px; height:86px; background:#111827; border:1px solid #475569; border-radius:8px; }
+    .readout { position:absolute; bottom:12px; right:12px; width:124px; height:82px; background:#15111e; border:1px solid #4c1d95; border-radius:8px; }
+    .stage-b { height:100%; display:grid; grid-template-rows:42px 1fr 72px; gap:8px; }
+    .bar, .foot, .side, .center { background:#111827; border:1px solid #3f3f46; border-radius:6px; }
+    .mid { display:grid; grid-template-columns:1fr 1.4fr 1fr; gap:8px; }
+    .center { background:#1f2937; border-color:#64748b; }
+    .stage-c { height:100%; display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .choice { background:#151515; border:1px solid #57534e; border-radius:6px; padding:10px; }
+    .choice strong { display:block; height:16px; border-radius:4px; background:#a16207; margin-bottom:10px; }
+    .choice:nth-child(2) strong { background:#2563eb; }
+    .choice span { display:block; height:70px; border-radius:4px; background:#292524; }
+    .choice:nth-child(2) span { background:#1f2937; }
+    .wide { grid-column:1 / 3; background:#101010; border:1px solid #3f3f46; border-radius:6px; }
+    .note { margin-top:22px; color:#94a3b8; font-size:13px; }
+    @media (max-width:900px) { body { padding:18px; } .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>이번 레이아웃 개선의 1차 성공 기준</h1>
+    <p class="subtitle">현재 코드는 전투 화면이 1280x720 고정 HUD 중심이고, 메뉴/보상/이벤트는 좁은 카드형 화면으로 분리되어 있습니다. 어디에 가장 힘을 실을지 먼저 잡으면 수정 방향이 선명해집니다.</p>
+    <section class="grid">
+      <article class="card">
+        <div class="visual"><div class="stage-a"><div class="hud left"></div><div class="hud right"></div><div class="duel"></div><div class="actions"></div><div class="readout"></div></div></div>
+        <div class="body"><h2>A. 전투 가독성 우선</h2><p>HUD 정보량을 정리하고, 거리/행/예측/행동 선택을 한 턴 안에서 더 빨리 읽히게 만듭니다.</p></div>
+      </article>
+      <article class="card">
+        <div class="visual"><div class="stage-b"><div class="bar"></div><div class="mid"><div class="side"></div><div class="center"></div><div class="side"></div></div><div class="foot"></div></div></div>
+        <div class="body"><h2>B. 전체 화면 일관성 우선</h2><p>시작, 튜토리얼, 보상, 이벤트, 게임오버까지 같은 게임 UI 문법으로 묶어 완성도를 올립니다.</p></div>
+      </article>
+      <article class="card">
+        <div class="visual"><div class="stage-c"><div class="choice"><strong></strong><span></span></div><div class="choice"><strong></strong><span></span></div><div class="wide"></div></div></div>
+        <div class="body"><h2>C. 기획 전달력 우선</h2><p>보상 선택, 빌드 해금, 부상/시너지/유령 같은 시스템을 플레이어가 더 잘 이해하고 기대하게 만듭니다.</p></div>
+      </article>
+    </section>
+    <p class="note">터미널에서 A/B/C 중 하나를 골라주시면, 그 방향으로 접근안 2-3개와 구체 디자인을 정리하겠습니다.</p>
+  </main>
+</body>
+</html>
