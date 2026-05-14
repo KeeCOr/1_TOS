@@ -905,6 +905,366 @@ function BattleTopBar({
   );
 }
 
+function BattleCommandPanel({
+  combatStep, playerMain, player, floor, distance, magicCooldown, subOpts, subDisabled,
+  perfectSub, likelySub, playerStats, enemyStats, onMainSelect, onSubSelect, onCancelSub,
+}: {
+  combatStep: CombatStep;
+  playerMain: ActionType | null;
+  player: Character;
+  floor: number;
+  distance: number;
+  magicCooldown: number;
+  subOpts: SubAction[];
+  subDisabled: (sub: SubAction) => boolean;
+  perfectSub: SubAction;
+  likelySub: SubAction;
+  playerStats: Character['stats'];
+  enemyStats: Character['stats'];
+  onMainSelect: (action: ActionType) => void;
+  onSubSelect: (sub: SubAction) => void;
+  onCancelSub: () => void;
+}) {
+  if (combatStep === 'select_main') {
+    return (
+      <div className="space-y-1.5">
+        <div className="grid grid-cols-2 gap-1.5">
+          {([
+            { action:'공격'    as ActionType, bg:'rgba(120,20,20,0.75)',  border:'rgba(200,50,50,0.6)',  icon:'⚔️' },
+            { action:'이동'    as ActionType, bg:'rgba(20,50,120,0.75)',  border:'rgba(50,100,200,0.6)', icon:'👣' },
+            { action:'방어'    as ActionType, bg:'rgba(20,80,30,0.75)',   border:'rgba(50,150,70,0.6)',  icon:'🛡️' },
+            { action:'마법 사용' as ActionType, bg:'rgba(70,20,120,0.75)', border:'rgba(130,60,200,0.6)', icon:'✨' },
+          ]).map(({ action, bg, border, icon }) => {
+            const spellCost  = getMagicCostByProgress(floor, player);
+            const outOfRange = action === '공격' && distance > player.weaponRange;
+            const disabled   = action === '마법 사용' && (player.mp < spellCost || magicCooldown > 0 || player.magicSlots.length === 0);
+            const bonus      = distanceBonus(action, distance);
+            const aRange     = getActionRange(action, player.weaponRange ?? 1);
+            return (
+              <button key={action} disabled={disabled} onClick={() => onMainSelect(action)}
+                className={`relative flex items-center gap-2.5 py-2.5 px-3 rounded-lg border transition-all active:scale-95 ${
+                  disabled || outOfRange ? 'cursor-pointer hover:brightness-125' : 'cursor-pointer hover:brightness-125'
+                }`}
+                style={{ background: disabled ? 'rgba(20,20,30,0.7)' : outOfRange ? 'rgba(90,45,10,0.75)' : bg,
+                  borderColor: disabled ? 'rgba(60,60,80,0.5)' : outOfRange ? 'rgba(160,80,20,0.7)' : border }}>
+                <span className="text-xl shrink-0">{icon}</span>
+                <div className="min-w-0">
+                  <div className={`text-sm font-black leading-tight ${disabled ? 'text-gray-600' : outOfRange ? 'text-orange-300' : 'text-white'}`}>{action}</div>
+                  <div className={`text-[9px] leading-none ${disabled ? 'text-gray-700' : outOfRange ? 'text-orange-500' : 'text-gray-400'}`}>
+                    {action === '공격' ? (outOfRange ? `⚠ 사거리 ${aRange}` : `사거리 ${aRange}`) :
+                     action === '마법 사용' ? (disabled ? (magicCooldown > 0 ? `대기 ${magicCooldown}턴` : '사용 불가') : `사거리 ${aRange}`) :
+                     action === '방어' ? '피해 감소' : '위치 이동'}
+                  </div>
+                </div>
+                {bonus !== 1.0 && !disabled && (
+                  <span className={`absolute top-1 right-1 text-[8px] font-black px-1 rounded ${bonus > 1 ? 'text-green-300 bg-green-900/50' : 'text-red-300 bg-red-900/50'}`}>
+                    {bonus > 1 ? `+${Math.round((bonus-1)*100)}%` : `${Math.round((bonus-1)*100)}%`}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+        {player.inventory.length > 0 && (
+          <button onClick={() => onMainSelect('아이템 사용')}
+            className="w-full flex items-center gap-2 py-1.5 px-3 rounded-lg border border-yellow-800/50 hover:brightness-125 active:scale-95 cursor-pointer"
+            style={{ background: 'rgba(60,40,5,0.75)' }}>
+            <span className="text-lg">🎒</span>
+            <span className="text-xs font-bold text-yellow-300">아이템 사용</span>
+            <span className="text-[9px] text-yellow-600 ml-auto truncate">{player.inventory.map(it=>it.name).join(' · ')}</span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (combatStep === 'select_sub' && playerMain) {
+    return (
+      <div className="space-y-1">
+        <div className="flex items-center gap-2 mb-1.5">
+          <span className="text-[11px] text-gray-400 font-bold">{playerMain}</span>
+          <span className="text-gray-700 text-[10px]">›</span>
+          <span className="text-[10px] text-gray-500">방식 선택</span>
+          <button onClick={onCancelSub}
+            className="ml-auto text-[9px] text-gray-600 hover:text-gray-300 border border-gray-800 rounded px-2 py-0.5 bg-black/50 transition-colors">
+            ← 취소
+          </button>
+        </div>
+        {subOpts.map(sub => {
+          const disabled  = subDisabled(sub);
+          const isPerfect = sub === perfectSub;
+          const isMiss    = !isPerfect && PERFECT_COUNTER[sub] === likelySub;
+          const baseStrDice = getDiceCount(playerStats.strength, enemyStats.strength);
+          const strDicePreview = playerMain === '공격' || playerMain === '방어'
+            ? Math.min(4, Math.max(1, baseStrDice + (isPerfect ? 1 : isMiss ? -1 : 0)))
+            : null;
+          return (
+            <button key={sub} disabled={disabled} onClick={() => !disabled && onSubSelect(sub)}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all active:scale-95 ${
+                disabled  ? 'opacity-40 cursor-not-allowed bg-black/40 border-gray-800 text-gray-600' :
+                isPerfect ? 'bg-yellow-900/60 border-yellow-600/70 text-yellow-200 hover:brightness-125' :
+                isMiss    ? 'bg-red-950/50 border-red-800/50 text-red-300 hover:brightness-125' :
+                            'bg-black/60 border-gray-700/60 text-gray-200 hover:bg-black/80 hover:border-gray-500'
+              }`}>
+              <div className="flex flex-col items-start min-w-0">
+                <span className="text-sm font-bold leading-tight">
+                  {isPerfect && <span className="text-yellow-400 mr-1">★</span>}
+                  {isMiss    && <span className="text-red-500 mr-1">✗</span>}
+                  {sub}
+                </span>
+                <span className={`text-[9px] leading-tight mt-0.5 ${
+                  isPerfect ? 'text-yellow-600' : isMiss ? 'text-red-700' : 'text-gray-600'
+                }`}>
+                  {isPerfect ? `카운터 — 힘싸움 +1주사위` :
+                   isMiss    ? `역카운터 — 힘싸움 -1주사위` :
+                               SUB_ACTION_INFO[sub]?.desc ?? ''}
+                </span>
+              </div>
+              {strDicePreview !== null && !disabled && (
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${
+                  isPerfect ? 'bg-yellow-800/60 text-yellow-300' :
+                  isMiss    ? 'bg-red-900/60 text-red-400' :
+                              'bg-gray-800 text-gray-400'
+                }`}>
+                  🎲{strDicePreview}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="text-center py-4">
+      <span className="text-yellow-400 font-bold animate-pulse text-sm">
+        {combatStep === 'rolling' ? '🎲 주사위 굴리는 중...' : '명령 결과 확인 중...'}
+      </span>
+    </div>
+  );
+}
+
+function BattleMiniMapPanel({
+  distance, playerPos, enemyPos, playerRow, enemyRow, logs,
+}: {
+  distance: number;
+  playerPos: number;
+  enemyPos: number;
+  playerRow: number;
+  enemyRow: number;
+  logs: string[];
+}) {
+  const tileW = [56, 46, 36, 46, 56];
+  const tileH = [20, 16, 12, 16, 20];
+  const pMarkerH = Math.round(8 + (1 - (playerPos - 1) / 4) * 10);
+  const eMarkerH = Math.round(8 + (1 - (5 - enemyPos) / 4) * 10);
+  const rowSame = playerRow === enemyRow;
+
+  return (
+    <div className="flex flex-col items-center justify-end gap-2 min-w-0">
+      <div className="flex items-center gap-2">
+        <span className={`text-[11px] font-bold tracking-wide ${DISTANCE_COLORS[distance] ?? 'text-gray-400'}`}>
+          {DISTANCE_LABELS[distance] ?? `거리 ${distance}`}
+        </span>
+        <StatusPill tone={rowSame ? 'warn' : 'neutral'}>{rowSame ? '같은 열' : '열 분리'}</StatusPill>
+      </div>
+      <div className="flex items-end gap-1">
+        {[1,2,3,4,5].map((pos, i) => {
+          const isP = pos === playerPos;
+          const isE = pos === enemyPos;
+          return (
+            <div key={pos} className="flex flex-col items-center" style={{ gap: '2px' }}>
+              <div style={{ height: Math.max(pMarkerH, eMarkerH) + 2, display: 'flex', alignItems: 'flex-end' }}>
+                {isP && (
+                  <div className="rounded-sm font-black text-blue-200 flex items-center justify-center"
+                    style={{ width: pMarkerH, height: pMarkerH, fontSize: pMarkerH * 0.55,
+                      background: 'rgba(59,130,246,0.7)', border: '1px solid rgba(96,165,250,0.8)',
+                      boxShadow: '0 0 8px rgba(59,130,246,0.5)' }}>P</div>
+                )}
+                {isE && (
+                  <div className="rounded-sm font-black text-red-200 flex items-center justify-center"
+                    style={{ width: eMarkerH, height: eMarkerH, fontSize: eMarkerH * 0.55,
+                      background: 'rgba(239,68,68,0.7)', border: '1px solid rgba(239,68,68,0.8)',
+                      boxShadow: '0 0 8px rgba(239,68,68,0.5)' }}>E</div>
+                )}
+                {!isP && !isE && <div style={{ height: 1 }} />}
+              </div>
+              <div className="rounded-sm transition-all duration-300" style={{
+                width: tileW[i], height: tileH[i],
+                background: isP ? 'rgba(59,130,246,0.45)' : isE ? 'rgba(239,68,68,0.45)' : 'rgba(255,255,255,0.05)',
+                border: isP ? '1px solid rgba(96,165,250,0.65)' : isE ? '1px solid rgba(239,68,68,0.6)' : '1px solid rgba(255,255,255,0.07)',
+                boxShadow: isP ? '0 0 12px rgba(59,130,246,0.3)' : isE ? '0 0 12px rgba(239,68,68,0.3)' : undefined,
+              }} />
+              <div className="font-bold transition-colors duration-300"
+                style={{ fontSize: 7, color: isP ? '#93c5fd' : isE ? '#fca5a5' : '#374151' }}>
+                {pos}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="w-full max-w-[260px]">
+        <BattleLog logs={logs} compact />
+      </div>
+    </div>
+  );
+}
+
+function BattleDetailPanel({
+  player, enemy, enemyElementValues, enemyElementClasses, magicCooldown,
+}: {
+  player: Character;
+  enemy: Character;
+  enemyElementValues: number[];
+  enemyElementClasses: string[];
+  magicCooldown: number;
+}) {
+  const enemyHasElements = enemyElementValues.some(v => v > 0);
+  const enemyAbilities = (enemy.abilities ?? []).slice(0, 4);
+  const activeEffects = player.activeEffects ?? [];
+  const injuries = player.injuries ?? [];
+  const titles = player.titles.slice(0, 3);
+  const hasPlayerTactics = activeEffects.length > 0 || injuries.length > 0 || titles.length > 0 || magicCooldown > 0;
+  const hasEnemyTactics = enemyHasElements || enemyAbilities.length > 0;
+
+  return (
+    <div className="space-y-2 min-w-0">
+      <div className="space-y-1">
+        <div className="text-[9px] uppercase tracking-wide text-gray-500 font-black">Enemy Intel</div>
+        {enemyHasElements && (
+          <div className="flex items-center gap-1 flex-wrap">
+            {enemyElementValues.map((v,i) => v > 0 ? (
+              <span key={i} className={`${enemyElementClasses[i]} rounded px-1.5 py-0.5 text-[8px] text-white font-bold`}>{v}</span>
+            ) : null)}
+          </div>
+        )}
+        {enemyAbilities.length > 0 && (
+          <div className="space-y-0.5">
+            {enemyAbilities.map(a => (
+              <div key={a.id} className="text-[8px] text-orange-500/80 truncate" title={a.description}>{a.name}</div>
+            ))}
+          </div>
+        )}
+        {!hasEnemyTactics && <div className="text-[9px] text-gray-600">특이 정보 없음</div>}
+      </div>
+
+      <div className="space-y-1">
+        <div className="text-[9px] uppercase tracking-wide text-gray-500 font-black">Player Tactics</div>
+        {activeEffects.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {activeEffects.map((e, i) => (
+              <span key={i} className="text-[8px] px-1 rounded bg-blue-900/60 text-blue-300 border border-blue-700/40">
+                {e.type === 'extra_speed_die' ? '⚡+속도' : e.type}({e.duration})
+              </span>
+            ))}
+          </div>
+        )}
+        {injuries.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {injuries.map(inj => (
+              <span key={inj.type} className={`text-[8px] px-1 rounded font-bold border ${
+                inj.severity === 'major'
+                  ? 'bg-red-900/70 text-red-200 border-red-600/60'
+                  : 'bg-orange-900/60 text-orange-300 border-orange-700/50'
+              }`}>
+                {inj.type === 'arm' ? '💪부상' : inj.type === 'leg' ? '🦵부상' : '🫀부상'}
+                {inj.severity === 'major' ? '(중)' : '(경)'}
+              </span>
+            ))}
+          </div>
+        )}
+        {titles.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {titles.map(t => (
+              <span key={t.id} className="text-[8px] px-1 rounded border border-gray-700/50 text-gray-400 bg-black/45">
+                {t.name}
+              </span>
+            ))}
+          </div>
+        )}
+        {magicCooldown > 0 && <StatusPill tone="magic">Magic {magicCooldown}T</StatusPill>}
+        {!hasPlayerTactics && <div className="text-[9px] text-gray-600">전술 보정 없음</div>}
+      </div>
+    </div>
+  );
+}
+
+function BattleTacticalConsole({
+  combatStep, playerMain, player, enemy, floor, distance, magicCooldown, subOpts,
+  subDisabled, perfectSub, likelySub, playerStats, enemyStats, playerPos, enemyPos,
+  playerRow, enemyRow, logs, enemyElementValues, enemyElementClasses,
+  onMainSelect, onSubSelect, onCancelSub,
+}: {
+  combatStep: CombatStep;
+  playerMain: ActionType | null;
+  player: Character;
+  enemy: Character;
+  floor: number;
+  distance: number;
+  magicCooldown: number;
+  subOpts: SubAction[];
+  subDisabled: (sub: SubAction) => boolean;
+  perfectSub: SubAction;
+  likelySub: SubAction;
+  playerStats: Character['stats'];
+  enemyStats: Character['stats'];
+  playerPos: number;
+  enemyPos: number;
+  playerRow: number;
+  enemyRow: number;
+  logs: string[];
+  enemyElementValues: number[];
+  enemyElementClasses: string[];
+  onMainSelect: (action: ActionType) => void;
+  onSubSelect: (sub: SubAction) => void;
+  onCancelSub: () => void;
+}) {
+  return (
+    <div className="absolute bottom-0 left-0 right-0 z-30 grid grid-cols-[320px_1fr_240px] gap-3 px-4 pb-4 pointer-events-auto"
+      style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.48) 72%, transparent 100%)' }}>
+      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+        <BattleCommandPanel
+          combatStep={combatStep}
+          playerMain={playerMain}
+          player={player}
+          floor={floor}
+          distance={distance}
+          magicCooldown={magicCooldown}
+          subOpts={subOpts}
+          subDisabled={subDisabled}
+          perfectSub={perfectSub}
+          likelySub={likelySub}
+          playerStats={playerStats}
+          enemyStats={enemyStats}
+          onMainSelect={onMainSelect}
+          onSubSelect={onSubSelect}
+          onCancelSub={onCancelSub}
+        />
+      </div>
+      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+        <BattleMiniMapPanel
+          distance={distance}
+          playerPos={playerPos}
+          enemyPos={enemyPos}
+          playerRow={playerRow}
+          enemyRow={enemyRow}
+          logs={logs}
+        />
+      </div>
+      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+        <BattleDetailPanel
+          player={player}
+          enemy={enemy}
+          enemyElementValues={enemyElementValues}
+          enemyElementClasses={enemyElementClasses}
+          magicCooldown={magicCooldown}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ════════════════════════════════════════════════════════════
 // Sub-action Panel
 // ════════════════════════════════════════════════════════════
