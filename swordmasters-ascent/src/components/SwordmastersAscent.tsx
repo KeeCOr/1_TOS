@@ -1067,7 +1067,7 @@ function BattleMiniMapPanel({
         <span className={`text-[11px] font-bold tracking-wide ${DISTANCE_COLORS[distance] ?? 'text-gray-400'}`}>
           {DISTANCE_LABELS[distance] ?? `거리 ${distance}`}
         </span>
-        <StatusPill tone={rowSame ? 'warn' : 'neutral'}>{rowSame ? '같은 열' : '열 분리'}</StatusPill>
+        <StatusPill tone={rowSame ? 'warn' : 'neutral'}>{rowSame ? '같은 행' : '행 분리'}</StatusPill>
       </div>
       <div className="flex items-end gap-1">
         {[1,2,3,4,5].map((pos, i) => {
@@ -1121,7 +1121,7 @@ function BattleDetailPanel({
   magicCooldown: number;
 }) {
   const enemyHasElements = enemyElementValues.some(v => v > 0);
-  const enemyAbilities = (enemy.abilities ?? []).slice(0, 4);
+  const enemyAbilities = enemy.abilities ?? [];
   const activeEffects = player.activeEffects ?? [];
   const injuries = player.injuries ?? [];
   const titles = player.titles.slice(0, 3);
@@ -1140,7 +1140,7 @@ function BattleDetailPanel({
           </div>
         )}
         {enemyAbilities.length > 0 && (
-          <div className="space-y-0.5">
+          <div className="space-y-0.5 max-h-16 overflow-y-auto pr-1">
             {enemyAbilities.map(a => (
               <div key={a.id} className="text-[8px] text-orange-500/80 truncate" title={a.description}>{a.name}</div>
             ))}
