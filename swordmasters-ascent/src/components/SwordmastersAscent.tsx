@@ -1142,7 +1142,7 @@ function BattleDetailPanel({
         {enemyAbilities.length > 0 && (
           <div className="space-y-0.5 max-h-16 overflow-y-auto pr-1">
             {enemyAbilities.map(a => (
-              <div key={a.id} className="text-[8px] text-orange-500/80 truncate" title={a.description}>{a.name}</div>
+              <div key={a.id} className="text-[8px] text-orange-500/80 leading-tight whitespace-normal break-words" title={a.description}>{a.name}</div>
             ))}
           </div>
         )}
