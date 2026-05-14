@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import {
   ActionType, SubAction, Character, FloatingText, GamePhase,
   Equipment, Item, Title, MagicSpell, CombatStep, MatchQuality, EnemyIntent, TurnResult, DiceContest, MagicDiceRoll,
@@ -769,6 +769,141 @@ const QUALITY_COLOR: Record<MatchQuality, string> = {
 const QUALITY_LABEL: Record<MatchQuality, string> = {
   perfect: '완벽 대응!', partial: '부분 대응', miss: '실패',
 };
+
+const HUD_PANEL_STYLE = {
+  background: 'linear-gradient(135deg, rgba(8,12,22,0.88), rgba(3,5,10,0.74))',
+  border: '1px solid rgba(148,163,184,0.16)',
+  boxShadow: '0 12px 28px rgba(0,0,0,0.32)',
+  backdropFilter: 'blur(6px)',
+} as const;
+
+const pct = (value: number, max: number) => `${Math.max(0, Math.min(100, max > 0 ? (value / max) * 100 : 0))}%`;
+
+function ResourceBar({
+  label, value, max, color, compact,
+}: {
+  label: string;
+  value: number;
+  max: number;
+  color: string;
+  compact?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <div className="flex justify-between text-[9px] leading-none mb-1">
+        <span className="font-black" style={{ color }}>{label} {value}</span>
+        <span className="text-gray-600 tabular-nums">{max}</span>
+      </div>
+      <div
+        className={`${compact ? 'h-1.5' : 'h-2.5'} rounded-sm overflow-hidden`}
+        style={{ background: 'rgba(0,0,0,0.62)', border: '1px solid rgba(255,255,255,0.08)' }}
+      >
+        <div className="h-full rounded-sm transition-all duration-700" style={{ width: pct(value, max), background: color }} />
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({
+  children, tone = 'neutral',
+}: {
+  children: ReactNode;
+  tone?: 'neutral' | 'good' | 'bad' | 'warn' | 'magic';
+}) {
+  const toneClass = {
+    neutral: 'border-gray-700/60 text-gray-400 bg-black/45',
+    good: 'border-green-700/60 text-green-300 bg-green-950/45',
+    bad: 'border-red-700/60 text-red-300 bg-red-950/45',
+    warn: 'border-yellow-700/60 text-yellow-300 bg-yellow-950/45',
+    magic: 'border-purple-700/60 text-purple-300 bg-purple-950/45',
+  }[tone];
+  return (
+    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-black leading-none border ${toneClass}`}>
+      {children}
+    </span>
+  );
+}
+
+function BattleTopBar({
+  floor, player, enemy, playerStats, enemyStats, distance, rowSame, intentHint,
+  magicCooldown, onSave,
+}: {
+  floor: number;
+  player: Character;
+  enemy: Character;
+  playerStats: Character['stats'];
+  enemyStats: Character['stats'];
+  distance: number;
+  rowSame: boolean;
+  intentHint: string;
+  magicCooldown: number;
+  onSave: () => void;
+}) {
+  const distanceLabel = DISTANCE_LABELS[distance] ?? `거리 ${distance}`;
+  const distanceColor = DISTANCE_COLORS[distance] ?? 'text-gray-300';
+
+  return (
+    <div
+      className="absolute top-0 left-0 right-0 z-30 grid grid-cols-[300px_1fr_300px] gap-3 px-4 pt-3 pb-4 pointer-events-auto"
+      style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.58) 66%, transparent 100%)' }}
+    >
+      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+        <div className="flex items-center gap-2 mb-2 min-w-0">
+          <StatusPill tone="warn">{floor}F</StatusPill>
+          <span className="text-[11px] text-gray-300 truncate">Lv.<b>{player.level}</b> {player.name}</span>
+          {player.condition && <StatusPill>{CONDITION_LABELS[player.condition]}</StatusPill>}
+        </div>
+        <div className="space-y-1.5">
+          <ResourceBar label="HP" value={player.hp} max={player.maxHp} color={player.hp / player.maxHp > 0.25 ? '#ef4444' : '#dc2626'} />
+          <ResourceBar label="MP" value={player.mp} max={player.maxMp} color="#60a5fa" compact />
+          <ResourceBar label="ST" value={player.stamina} max={player.maxStamina} color={player.stamina / player.maxStamina > 0.5 ? '#ca8a04' : '#ea580c'} compact />
+        </div>
+        <div className="flex gap-2 flex-wrap pt-1.5">
+          <span className="text-[9px] text-gray-400">STR <b className="text-gray-200">{playerStats.strength}</b></span>
+          <span className="text-[9px] text-gray-400">AGI <b className="text-gray-200">{playerStats.agility}</b></span>
+          <span className="text-[9px] text-gray-400">ARM <b className="text-gray-200">{playerStats.armor}%</b></span>
+          {magicCooldown > 0 && <StatusPill tone="magic">Magic {magicCooldown}T</StatusPill>}
+        </div>
+      </div>
+
+      <div className="rounded-lg px-4 py-3 flex flex-col items-center justify-center min-w-0" style={HUD_PANEL_STYLE}>
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`text-lg font-black ${distanceColor}`}>{distanceLabel}</span>
+          <StatusPill tone={rowSame ? 'warn' : 'neutral'}>{rowSame ? '⚔ 같은행' : '↕ 분리'}</StatusPill>
+        </div>
+        <div className="text-[11px] text-gray-400 max-w-[520px] truncate">
+          {intentHint}
+        </div>
+      </div>
+
+      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+        <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-[11px] text-red-300 font-black truncate">{enemy.name}</span>
+            {enemy.isBoss && <StatusPill tone="warn">BOSS</StatusPill>}
+            {enemy.condition && <StatusPill>{CONDITION_LABELS[enemy.condition]}</StatusPill>}
+          </div>
+          <button
+            onClick={onSave}
+            className="text-[9px] px-2 py-1 rounded text-gray-500 hover:text-white border border-gray-800 hover:border-gray-600 bg-black/45 transition-all shrink-0"
+          >
+            저장
+          </button>
+        </div>
+        <div className="space-y-1.5">
+          <ResourceBar label="HP" value={enemy.hp} max={enemy.maxHp} color="#ef4444" />
+          <ResourceBar label="MP" value={enemy.mp} max={enemy.maxMp} color="#a855f7" compact />
+          <ResourceBar label="ST" value={enemy.stamina} max={enemy.maxStamina} color="#ea580c" compact />
+        </div>
+        <div className="flex gap-2 flex-wrap justify-end pt-1.5">
+          <span className={`text-[9px] font-bold ${enemyStats.strength > playerStats.strength ? 'text-red-400' : 'text-green-400'}`}>STR {enemyStats.strength}</span>
+          <span className={`text-[9px] font-bold ${enemyStats.agility > playerStats.agility ? 'text-red-400' : 'text-green-400'}`}>AGI {enemyStats.agility}</span>
+          <span className="text-[9px] text-gray-400">ARM {enemyStats.armor}%</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ════════════════════════════════════════════════════════════
 // Sub-action Panel
