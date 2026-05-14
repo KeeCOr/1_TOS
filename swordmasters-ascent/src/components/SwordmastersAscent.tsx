@@ -927,7 +927,7 @@ function BattleCommandPanel({
 }) {
   if (combatStep === 'select_main') {
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-1.5 min-w-0">
         <div className="grid grid-cols-2 gap-1.5">
           {([
             { action:'공격'    as ActionType, bg:'rgba(120,20,20,0.75)',  border:'rgba(200,50,50,0.6)',  icon:'⚔️' },
@@ -942,15 +942,15 @@ function BattleCommandPanel({
             const aRange     = getActionRange(action, player.weaponRange ?? 1);
             return (
               <button key={action} disabled={disabled} onClick={() => onMainSelect(action)}
-                className={`relative flex items-center gap-2.5 py-2.5 px-3 rounded-lg border transition-all active:scale-95 ${
+                className={`relative flex min-w-0 items-center gap-2.5 py-2.5 px-3 rounded-lg border transition-all active:scale-95 ${
                   disabled || outOfRange ? 'cursor-pointer hover:brightness-125' : 'cursor-pointer hover:brightness-125'
                 }`}
                 style={{ background: disabled ? 'rgba(20,20,30,0.7)' : outOfRange ? 'rgba(90,45,10,0.75)' : bg,
                   borderColor: disabled ? 'rgba(60,60,80,0.5)' : outOfRange ? 'rgba(160,80,20,0.7)' : border }}>
                 <span className="text-xl shrink-0">{icon}</span>
                 <div className="min-w-0">
-                  <div className={`text-sm font-black leading-tight ${disabled ? 'text-gray-600' : outOfRange ? 'text-orange-300' : 'text-white'}`}>{action}</div>
-                  <div className={`text-[9px] leading-none ${disabled ? 'text-gray-700' : outOfRange ? 'text-orange-500' : 'text-gray-400'}`}>
+                  <div className={`truncate text-sm font-black leading-tight ${disabled ? 'text-gray-600' : outOfRange ? 'text-orange-300' : 'text-white'}`}>{action}</div>
+                  <div className={`truncate text-[9px] leading-none ${disabled ? 'text-gray-700' : outOfRange ? 'text-orange-500' : 'text-gray-400'}`}>
                     {action === '공격' ? (outOfRange ? `⚠ 사거리 ${aRange}` : `사거리 ${aRange}`) :
                      action === '마법 사용' ? (disabled ? (magicCooldown > 0 ? `대기 ${magicCooldown}턴` : '사용 불가') : `사거리 ${aRange}`) :
                      action === '방어' ? '피해 감소' : '위치 이동'}
@@ -967,7 +967,7 @@ function BattleCommandPanel({
         </div>
         {player.inventory.length > 0 && (
           <button onClick={() => onMainSelect('아이템 사용')}
-            className="w-full flex items-center gap-2 py-1.5 px-3 rounded-lg border border-yellow-800/50 hover:brightness-125 active:scale-95 cursor-pointer"
+            className="w-full flex min-w-0 items-center gap-2 py-1.5 px-3 rounded-lg border border-yellow-800/50 hover:brightness-125 active:scale-95 cursor-pointer"
             style={{ background: 'rgba(60,40,5,0.75)' }}>
             <span className="text-lg">🎒</span>
             <span className="text-xs font-bold text-yellow-300">아이템 사용</span>
@@ -980,16 +980,17 @@ function BattleCommandPanel({
 
   if (combatStep === 'select_sub' && playerMain) {
     return (
-      <div className="space-y-1">
-        <div className="flex items-center gap-2 mb-1.5">
-          <span className="text-[11px] text-gray-400 font-bold">{playerMain}</span>
+      <div className="flex max-h-[170px] min-h-0 min-w-0 flex-col">
+        <div className="mb-1.5 flex shrink-0 items-center gap-2">
+          <span className="truncate text-[11px] text-gray-400 font-bold">{playerMain}</span>
           <span className="text-gray-700 text-[10px]">›</span>
           <span className="text-[10px] text-gray-500">방식 선택</span>
           <button onClick={onCancelSub}
-            className="ml-auto text-[9px] text-gray-600 hover:text-gray-300 border border-gray-800 rounded px-2 py-0.5 bg-black/50 transition-colors">
+            className="ml-auto shrink-0 text-[9px] text-gray-600 hover:text-gray-300 border border-gray-800 rounded px-2 py-0.5 bg-black/50 transition-colors">
             ← 취소
           </button>
         </div>
+        <div className="min-h-0 space-y-1 overflow-y-auto overscroll-contain pr-1">
         {subOpts.map(sub => {
           const disabled  = subDisabled(sub);
           const isPerfect = sub === perfectSub;
@@ -1000,19 +1001,19 @@ function BattleCommandPanel({
             : null;
           return (
             <button key={sub} disabled={disabled} onClick={() => !disabled && onSubSelect(sub)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all active:scale-95 ${
+              className={`w-full flex min-w-0 items-center justify-between gap-2 px-3 py-2.5 rounded-lg border transition-all active:scale-95 ${
                 disabled  ? 'opacity-40 cursor-not-allowed bg-black/40 border-gray-800 text-gray-600' :
                 isPerfect ? 'bg-yellow-900/60 border-yellow-600/70 text-yellow-200 hover:brightness-125' :
                 isMiss    ? 'bg-red-950/50 border-red-800/50 text-red-300 hover:brightness-125' :
                             'bg-black/60 border-gray-700/60 text-gray-200 hover:bg-black/80 hover:border-gray-500'
               }`}>
-              <div className="flex flex-col items-start min-w-0">
-                <span className="text-sm font-bold leading-tight">
+              <div className="flex min-w-0 flex-col items-start text-left">
+                <span className="max-w-full truncate text-sm font-bold leading-tight">
                   {isPerfect && <span className="text-yellow-400 mr-1">★</span>}
                   {isMiss    && <span className="text-red-500 mr-1">✗</span>}
                   {sub}
                 </span>
-                <span className={`text-[9px] leading-tight mt-0.5 ${
+                <span className={`max-w-full truncate text-[9px] leading-tight mt-0.5 ${
                   isPerfect ? 'text-yellow-600' : isMiss ? 'text-red-700' : 'text-gray-600'
                 }`}>
                   {isPerfect ? `카운터 — 힘싸움 +1주사위` :
@@ -1032,12 +1033,13 @@ function BattleCommandPanel({
             </button>
           );
         })}
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="text-center py-4">
+    <div className="max-h-[170px] overflow-hidden py-4 text-center">
       <span className="text-yellow-400 font-bold animate-pulse text-sm">
         {combatStep === 'rolling' ? '🎲 주사위 굴리는 중...' : '명령 결과 확인 중...'}
       </span>
@@ -1131,8 +1133,8 @@ function BattleDetailPanel({
   const hasEnemyTactics = enemyHasElements || enemyAbilities.length > 0 || enemyActiveEffects.length > 0;
 
   return (
-    <div className="space-y-2 min-w-0">
-      <div className="space-y-1">
+    <div className="flex max-h-[170px] min-h-0 min-w-0 flex-col gap-2 overflow-hidden">
+      <div className="min-h-0 max-h-[86px] space-y-1 overflow-y-auto overscroll-contain pr-1">
         <div className="text-[9px] uppercase tracking-wide text-gray-500 font-black">Enemy Intel</div>
         {enemyHasElements && (
           <div className="flex items-center gap-1 flex-wrap">
@@ -1142,9 +1144,9 @@ function BattleDetailPanel({
           </div>
         )}
         {enemyAbilities.length > 0 && (
-          <div className="space-y-0.5 max-h-16 overflow-y-auto pr-1">
+          <div className="space-y-0.5 max-h-16 overflow-y-auto overscroll-contain pr-1">
             {enemyAbilities.map(a => (
-              <div key={a.id} className="text-[8px] text-orange-500/80 leading-tight whitespace-normal break-words" title={a.description}>{a.name}</div>
+              <div key={a.id} className="min-w-0 text-[8px] text-orange-500/80 leading-tight whitespace-normal break-words" title={a.description}>{a.name}</div>
             ))}
           </div>
         )}
@@ -1164,7 +1166,7 @@ function BattleDetailPanel({
         {!hasEnemyTactics && <div className="text-[9px] text-gray-600">특이 정보 없음</div>}
       </div>
 
-      <div className="space-y-1">
+      <div className="min-h-0 max-h-[72px] space-y-1 overflow-y-auto overscroll-contain pr-1">
         <div className="text-[9px] uppercase tracking-wide text-gray-500 font-black">Player Tactics</div>
         {activeEffects.length > 0 && (
           <div className="flex gap-1 flex-wrap">
@@ -1245,7 +1247,7 @@ function BattleTacticalConsole({
   return (
     <div className="absolute bottom-0 left-0 right-0 z-30 grid grid-cols-[320px_1fr_240px] gap-3 px-4 pb-4 pointer-events-auto"
       style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.48) 72%, transparent 100%)' }}>
-      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+      <div className="rounded-lg p-2.5 min-w-0 max-h-[190px] overflow-hidden" style={HUD_PANEL_STYLE}>
         <BattleCommandPanel
           combatStep={combatStep}
           playerMain={playerMain}
@@ -1274,7 +1276,7 @@ function BattleTacticalConsole({
           logs={logs}
         />
       </div>
-      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+      <div className="rounded-lg p-2.5 min-w-0 max-h-[190px] overflow-hidden" style={HUD_PANEL_STYLE}>
         <BattleDetailPanel
           player={player}
           enemy={enemy}
