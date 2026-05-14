@@ -25,6 +25,7 @@
       "package.json"
     ],
     "win": {
+      "icon": "icon.ico",
       "forceCodeSigning": false,
       "signAndEditExecutable": false,
       "verifyUpdateCodeSignature": false,
