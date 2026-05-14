@@ -1,6 +1,9 @@
 # 릴리스 바이너리 (용량 큼)
 release/
 
+# local isolated worktrees
+.worktrees/
+
 # Node
 node_modules/
 npm-debug.log*
