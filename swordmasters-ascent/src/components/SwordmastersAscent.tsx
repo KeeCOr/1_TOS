@@ -1122,11 +1122,13 @@ function BattleDetailPanel({
 }) {
   const enemyHasElements = enemyElementValues.some(v => v > 0);
   const enemyAbilities = enemy.abilities ?? [];
+  const enemyActiveEffects = enemy.activeEffects ?? [];
   const activeEffects = player.activeEffects ?? [];
+  const activeSynergies = getActiveSynergies(player);
   const injuries = player.injuries ?? [];
   const titles = player.titles.slice(0, 3);
-  const hasPlayerTactics = activeEffects.length > 0 || injuries.length > 0 || titles.length > 0 || magicCooldown > 0;
-  const hasEnemyTactics = enemyHasElements || enemyAbilities.length > 0;
+  const hasPlayerTactics = activeEffects.length > 0 || activeSynergies.length > 0 || injuries.length > 0 || titles.length > 0 || magicCooldown > 0;
+  const hasEnemyTactics = enemyHasElements || enemyAbilities.length > 0 || enemyActiveEffects.length > 0;
 
   return (
     <div className="space-y-2 min-w-0">
@@ -1143,6 +1145,19 @@ function BattleDetailPanel({
           <div className="space-y-0.5 max-h-16 overflow-y-auto pr-1">
             {enemyAbilities.map(a => (
               <div key={a.id} className="text-[8px] text-orange-500/80 leading-tight whitespace-normal break-words" title={a.description}>{a.name}</div>
+            ))}
+          </div>
+        )}
+        {enemyActiveEffects.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {enemyActiveEffects.map((e, i) => (
+              <StatusPill key={`${e.type}-${i}`} tone={e.type === 'extra_speed_die' ? 'warn' : 'bad'}>
+                {e.type === 'stamina_drain' ? 'ST Drain'
+                  : e.type === 'movement_lock' ? 'Lock'
+                  : e.type === 'agility_debuff' ? 'AGI Down'
+                  : e.type === 'extra_speed_die' ? 'Speed+'
+                  : e.type} {e.duration}T
+              </StatusPill>
             ))}
           </div>
         )}
@@ -1180,6 +1195,13 @@ function BattleDetailPanel({
               <span key={t.id} className="text-[8px] px-1 rounded border border-gray-700/50 text-gray-400 bg-black/45">
                 {t.name}
               </span>
+            ))}
+          </div>
+        )}
+        {activeSynergies.length > 0 && (
+          <div className="flex gap-1 flex-wrap">
+            {activeSynergies.map(syn => (
+              <StatusPill key={syn.id} tone="magic">{syn.name}</StatusPill>
             ))}
           </div>
         )}
