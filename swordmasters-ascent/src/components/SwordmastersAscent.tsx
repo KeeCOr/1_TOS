@@ -1344,11 +1344,14 @@ function BattleTacticalConsole({
             <div className="flex min-w-0 items-center gap-2">
               <span className="text-base leading-none">{ACTION_ICONS[enemyMainAction] ?? '⚔️'}</span>
               <div className="min-w-0">
-                <div className="truncate text-[10px] font-black text-red-200">
-                  적 예상: {enemyMainAction} / {likelySub}
+                <div className="truncate text-[9px] font-black uppercase tracking-wide text-red-500">
+                  상대 예상 행동
+                </div>
+                <div className="truncate text-[11px] font-black text-red-100">
+                  {enemyMainAction} / {likelySub}
                 </div>
                 <div className="truncate text-[9px] text-red-400/80">
-                  {likelyInfo?.hint ?? likelyInfo?.desc ?? '상대의 움직임을 읽는 중'}
+                  힌트: {likelyInfo?.hint ?? likelyInfo?.desc ?? '상대의 움직임을 읽는 중'}
                 </div>
               </div>
             </div>
