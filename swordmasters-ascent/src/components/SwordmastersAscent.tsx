@@ -3050,9 +3050,9 @@ export default function SwordmastersAscent() {
   // ── 바닥 원근 그리드 좌표계 ──────────────────────────────────
   // pos1=앞(카메라 가까움·화면 아래), pos5=뒤(원경·화면 위)
   // row1=왼쪽, row2=중앙, row3=오른쪽
-  const G_NY = 560, G_FY = 392;        // floor perspective Y
-  const G_NL = 238, G_NR = 1042;       // near edge X
-  const G_FL = 444, G_FR = 836;        // far edge X
+  const G_NY = 610, G_FY = 430;        // floor perspective Y
+  const G_NL = 205, G_NR = 1175;       // near edge X
+  const G_FL = 610, G_FR = 1010;       // far edge X
   const gPt = (td: number, tl: number) => {
     const nx = G_NL + tl * (G_NR - G_NL);
     const fx = G_FL + tl * (G_FR - G_FL);
