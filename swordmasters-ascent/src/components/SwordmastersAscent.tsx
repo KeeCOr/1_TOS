@@ -739,10 +739,10 @@ const STAT_LABELS: Record<string, string> = {
   strength: '💪 힘', agility: '👣 민첩', armor: '🛡️ 방어율', critChance: '🗡️ 치명타',
 };
 
-function StatRollScreen({ onComplete, highScore, playerName, selectedBuild }: {
-  onComplete: (p: Character) => void; highScore: number; playerName: string; selectedBuild: StartBuild;
+function StatRollScreen({ onComplete, highScore, playerName }: {
+  onComplete: (p: Character) => void; highScore: number; playerName: string;
 }) {
-  const playerRef = useRef(createPlayer(highScore, playerName, selectedBuild));
+  const playerRef = useRef(createPlayer(highScore, playerName));
   const finalRef  = useRef(playerRef.current.stats);
 
   const [display, setDisplay] = useState({ strength:0, agility:0, armor:0, critChance:0 });
@@ -1320,14 +1320,9 @@ function BattleTacticalConsole({
         />
       </div>
       <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
-        <BattleMiniMapPanel
-          distance={distance}
-          playerPos={playerPos}
-          enemyPos={enemyPos}
-          playerRow={playerRow}
-          enemyRow={enemyRow}
-          logs={logs}
-        />
+        <div className="flex h-full min-w-0 flex-col justify-end">
+          <BattleLog logs={logs} compact />
+        </div>
       </div>
       <div className="rounded-lg p-2.5 min-w-0 max-h-[190px] overflow-hidden" style={HUD_PANEL_STYLE}>
         <BattleDetailPanel
@@ -2129,7 +2124,7 @@ function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial, unlockedK
       </div>
 
       {/* 시작 빌드 선택 */}
-      <div className="mt-4 mb-2 px-5 w-full max-w-xs">
+      <div className="hidden mt-4 mb-2 px-5 w-full max-w-xs">
         <div className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2">시작 빌드</div>
         <div className="flex flex-col gap-2">
           <button
@@ -2899,7 +2894,7 @@ export default function SwordmastersAscent() {
   if (phase === 'stat_roll') return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <StatRollScreen highScore={highScore} onComplete={onStatRollComplete} playerName={pendingPlayerName} selectedBuild={selectedBuild} />
+        <StatRollScreen highScore={highScore} onComplete={onStatRollComplete} playerName={pendingPlayerName} />
       </div>
     </div>
   );
@@ -3020,28 +3015,32 @@ export default function SwordmastersAscent() {
   // ── 바닥 원근 그리드 좌표계 ──────────────────────────────────
   // pos1=앞(카메라 가까움·화면 아래), pos5=뒤(원경·화면 위)
   // row1=왼쪽, row2=중앙, row3=오른쪽
-  const G_NY = 572, G_FY = 340;        // 근경·원경 Y
-  const G_NL = 0,   G_NR = 1280;       // 근경 좌·우 X
-  const G_FL = 260, G_FR = 1020;       // 원경 좌·우 X
+  const G_NY = 560, G_FY = 392;        // floor perspective Y
+  const G_NL = 238, G_NR = 1042;       // near edge X
+  const G_FL = 444, G_FR = 836;        // far edge X
   const gPt = (td: number, tl: number) => {
     const nx = G_NL + tl * (G_NR - G_NL);
     const fx = G_FL + tl * (G_FR - G_FL);
     return { x: nx + td * (fx - nx), y: G_NY + td * (G_FY - G_NY) };
   };
   const pTD = (2 * playerPos - 1) / 10;  // pos1=0.1 … pos5=0.9
-  // Player leans left (-0.12), enemy leans right (+0.12) so they don't overlap at same row
-  const pTL = Math.max(0, Math.min(1, (playerRow - 0.5) / 3 - 0.12));
+  const sameCell = playerPos === enemyPos && playerRow === enemyRow;
+  const laneCenter = (row: number) => (row - 0.5) / 3;
+  const pTL = Math.max(0, Math.min(1, laneCenter(playerRow) + (sameCell ? -0.055 : 0)));
   const eTD = (2 * enemyPos  - 1) / 10;
-  const eTL = Math.max(0, Math.min(1, (enemyRow  - 0.5) / 3 + 0.12));
+  const eTL = Math.max(0, Math.min(1, laneCenter(enemyRow) + (sameCell ? 0.055 : 0)));
   const pC  = gPt(pTD, pTL);
   const eC  = gPt(eTD, eTL);
-  const playerSize   = Math.round(380 - (playerPos - 1) * 40); // pos1=380, pos5=220
-  const enemySize    = Math.round(380 - (enemyPos  - 1) * 40);
-  const playerLeft   = Math.round(pC.x - playerSize  / 2);
-  const playerBottom = Math.round(720  - pC.y);
-  const enemyLeft    = Math.round(eC.x - enemySize   / 2);
-  const enemyBottom  = Math.round(720  - eC.y);
-  const enemyRight   = Math.round(1280 - enemyLeft   - enemySize);
+  const playerSize   = Math.round(330 - (playerPos - 1) * 28); // pos1=330, pos5=218
+  const enemySize    = Math.round(330 - (enemyPos  - 1) * 28);
+  const playerVisualCenterOffset = -131 / 2048 * playerSize;
+  const enemyVisualCenterOffset = 29 / 1024 * enemySize;
+  const playerBottomPad = 89 / 2048 * playerSize;
+  const enemyBottomPad = 16 / 1024 * enemySize;
+  const playerLeft   = Math.round(pC.x - playerSize / 2 - playerVisualCenterOffset);
+  const playerBottom = Math.round(BATTLE_CANVAS_HEIGHT - pC.y - playerBottomPad);
+  const enemyLeft    = Math.round(eC.x - enemySize / 2 - enemyVisualCenterOffset);
+  const enemyBottom  = Math.round(BATTLE_CANVAS_HEIGHT - eC.y - enemyBottomPad);
 
   return (
     <BattleViewport>
