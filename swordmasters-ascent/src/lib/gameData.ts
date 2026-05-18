@@ -97,7 +97,7 @@ export const PERFECT_COUNTER: Record<SubAction, SubAction> = {
 };
 
 export const SUB_ACTION_INFO: Record<SubAction, { desc: string; counter: string; hint: string }> = {
-  '세로 베기':  { desc: '강력한 내리치기',   counter: '→ 올려막기', hint: '검을 머리 위로 높이 들어올렸다' },
+  '세로 베기':  { desc: '묵직한 내리치기',   counter: '→ 올려막기', hint: '검을 머리 위로 높이 들어올렸다' },
   '가로 베기':  { desc: '옆으로 베기+경직',  counter: '→ 세로 막기', hint: '검을 옆으로 크게 벌리며 자세를 낮췄다' },
   '찌르기':     { desc: '빠른 찌르기',       counter: '→ 가로 막기', hint: '검 끝을 앞으로 겨냥하며 중심을 낮췄다' },
   '세로 막기':  { desc: '수직 방어',         counter: '→ 세로 베기', hint: '검을 수직으로 세워 정면을 가렸다' },
@@ -119,6 +119,10 @@ export const SUB_ACTION_INFO: Record<SubAction, { desc: string; counter: string;
   '번개 일격':  { desc: '번개 마법 공격',     counter: '→ 올려막기', hint: '팔끝에서 파란 전기가 지직거리기 시작했다' },
   '바람 쇄도':  { desc: '바람 마법 공격',     counter: '→ 전진 압박', hint: '양손이 바람을 끌어모으며 소용돌이쳤다' },
   '뒤로 베기':  { desc: '후퇴하며 베기 + 적 밀어냄 (밀착 전용)', counter: '→ 전진 압박', hint: '물러서면서 검을 옆으로 긋는다' },
+};
+
+export const SUB_ACTION_DICE_MODIFIERS: Partial<Record<SubAction, { speed?: number; strength?: number }>> = {
+  '세로 베기': { speed: -1, strength: 1 },
 };
 
 // ── Distance ─────────────────────────────────────────────────
@@ -1007,8 +1011,9 @@ export function resolveTurn(
 
   // ── 1. 속도 결정 주사위 ──────────────────────────────────────
   // 민첩 상대 비율로 주사위 수 결정 (스테미나 감소 시 effective agility가 이미 낮아짐)
+  const playerDiceMods = SUB_ACTION_DICE_MODIFIERS[playerSub] ?? {};
   const pSpdDiceBase = getDiceCount(playerStats.agility, enemyStats.agility); // 적 디버프는 플레이어 주사위에 도움 안 됨
-  const pSpdDice = Math.min(4, pSpdDiceBase + (playerExtraSpeedDie ? 1 : 0));
+  const pSpdDice = Math.min(4, Math.max(1, pSpdDiceBase + (playerExtraSpeedDie ? 1 : 0) + (playerDiceMods.speed ?? 0)));
   const eSpdDice = enemyMoveLocked ? 0
     : getDiceCount(
         enemyAgiDebuffed ? Math.floor(enemyStats.agility * 0.7) : enemyStats.agility, // 디버프로 적 자신 주사위 감소
@@ -1031,6 +1036,7 @@ export function resolveTurn(
     let pStrDice = getDiceCount(playerStats.strength, enemyStats.strength);
     let eStrDice = getDiceCount(enemyStats.strength, playerStats.strength);
     // 서브 액션 매칭이 힘싸움 다이스를 추가 조정
+    if (playerDiceMods.strength) pStrDice = Math.min(4, Math.max(1, pStrDice + playerDiceMods.strength));
     if (quality === 'perfect') pStrDice = Math.min(4, pStrDice + 1);
     if (quality === 'miss')    pStrDice = Math.max(1, pStrDice - 1);
 

@@ -6,7 +6,7 @@ import {
   Equipment, Item, Title, MagicSpell, CombatStep, MatchQuality, EnemyIntent, TurnResult, DiceContest, MagicDiceRoll,
   FloorGhosts, StatusEffect, AIContext,
   FloorEvent, FloorEventChoice, FloorEventType,
-  SUB_ACTIONS, SUB_ACTION_INFO, PERFECT_COUNTER, MAGIC_SPELL_POOL, getDiceCount,
+  SUB_ACTIONS, SUB_ACTION_INFO, SUB_ACTION_DICE_MODIFIERS, PERFECT_COUNTER, MAGIC_SPELL_POOL, getDiceCount,
   generateEnemyIntent, resolveTurn, generateEnemy, createPlayer,
   getRewardEquipment, ITEM_REWARD_POOL, generateCombatTitles,
   generateFloorEvent, shouldTriggerEvent,
@@ -1048,9 +1048,11 @@ function BattleCommandPanel({
           const disabled  = subDisabled(sub);
           const isPerfect = sub === perfectSub;
           const isMiss    = !isPerfect && PERFECT_COUNTER[sub] === likelySub;
+          const diceMods = SUB_ACTION_DICE_MODIFIERS[sub] ?? {};
+          const hasDiceMods = diceMods.speed !== undefined || diceMods.strength !== undefined;
           const baseStrDice = getDiceCount(playerStats.strength, enemyStats.strength);
           const strDicePreview = playerMain === '공격' || playerMain === '방어'
-            ? Math.min(4, Math.max(1, baseStrDice + (isPerfect ? 1 : isMiss ? -1 : 0)))
+            ? Math.min(4, Math.max(1, baseStrDice + (diceMods.strength ?? 0) + (isPerfect ? 1 : isMiss ? -1 : 0)))
             : null;
           return (
             <button key={sub} disabled={disabled} onClick={() => !disabled && onSubSelect(sub)}
@@ -1073,6 +1075,20 @@ function BattleCommandPanel({
                    isMiss    ? `역카운터 — 힘싸움 -1주사위` :
                                SUB_ACTION_INFO[sub]?.desc ?? ''}
                 </span>
+                {hasDiceMods && (
+                  <span className="mt-1 flex max-w-full flex-wrap gap-1">
+                    {diceMods.speed !== undefined && (
+                      <span className="rounded border border-blue-700/50 bg-blue-950/45 px-1.5 py-0.5 text-[8px] font-black leading-none text-blue-300">
+                        속도 보정 {diceMods.speed > 0 ? '+' : ''}{diceMods.speed}
+                      </span>
+                    )}
+                    {diceMods.strength !== undefined && (
+                      <span className="rounded border border-red-700/50 bg-red-950/45 px-1.5 py-0.5 text-[8px] font-black leading-none text-red-300">
+                        힘 보정 {diceMods.strength > 0 ? '+' : ''}{diceMods.strength}
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
               {strDicePreview !== null && !disabled && (
                 <span className={`text-[10px] font-black px-1.5 py-0.5 rounded shrink-0 ${
