@@ -3176,7 +3176,7 @@ export default function SwordmastersAscent() {
 
       {/* ══════ 주사위 패널 — 캐릭터 사이 중앙 오버레이 ══════ */}
       {(combatStep === 'rolling' || combatStep === 'result') && turnResult && (
-        <div className="absolute pointer-events-none z-30"
+        <div className="absolute pointer-events-none z-[70]"
           style={{
             left: '50%',
             top: `${Math.round((pC.y + eC.y) / 2 - 20)}px`,
