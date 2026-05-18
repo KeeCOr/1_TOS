@@ -1285,7 +1285,7 @@ function BattleDetailPanel({
 
 function BattleTacticalConsole({
   combatStep, playerMain, player, enemy, floor, distance, magicCooldown, subOpts,
-  subDisabled, perfectSub, likelySub, playerStats, enemyStats, playerPos, enemyPos,
+  subDisabled, perfectSub, likelySub, enemyMainAction, playerStats, enemyStats, playerPos, enemyPos,
   playerRow, enemyRow, logs, enemyElementValues, enemyElementClasses,
   onMainSelect, onSubSelect, onCancelSub,
 }: {
@@ -1300,6 +1300,7 @@ function BattleTacticalConsole({
   subDisabled: (sub: SubAction) => boolean;
   perfectSub: SubAction;
   likelySub: SubAction;
+  enemyMainAction: ActionType;
   playerStats: Character['stats'];
   enemyStats: Character['stats'];
   playerPos: number;
@@ -1313,6 +1314,8 @@ function BattleTacticalConsole({
   onSubSelect: (sub: SubAction) => void;
   onCancelSub: () => void;
 }) {
+  const likelyInfo = SUB_ACTION_INFO[likelySub];
+
   return (
     <div className="absolute bottom-0 left-0 right-0 z-30 grid grid-cols-[320px_1fr_240px] gap-3 px-4 pb-4 pointer-events-auto"
       style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.48) 72%, transparent 100%)' }}>
@@ -1336,7 +1339,20 @@ function BattleTacticalConsole({
         />
       </div>
       <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
-        <div className="flex h-full min-w-0 flex-col justify-end">
+        <div className="flex h-full min-w-0 flex-col justify-end gap-2">
+          <div className="min-w-0 rounded border border-red-900/45 bg-red-950/30 px-2.5 py-1.5">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="text-base leading-none">{ACTION_ICONS[enemyMainAction] ?? '⚔️'}</span>
+              <div className="min-w-0">
+                <div className="truncate text-[10px] font-black text-red-200">
+                  적 예상: {enemyMainAction} / {likelySub}
+                </div>
+                <div className="truncate text-[9px] text-red-400/80">
+                  {likelyInfo?.hint ?? likelyInfo?.desc ?? '상대의 움직임을 읽는 중'}
+                </div>
+              </div>
+            </div>
+          </div>
           <BattleLog logs={logs} compact />
         </div>
       </div>
@@ -3288,6 +3304,7 @@ export default function SwordmastersAscent() {
         subDisabled={subDisabled}
         perfectSub={perfectSub}
         likelySub={likelySub}
+        enemyMainAction={intent.mainAction}
         playerStats={pStats}
         enemyStats={eStats}
         playerPos={playerPos}
