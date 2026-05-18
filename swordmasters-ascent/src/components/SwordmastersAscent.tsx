@@ -57,6 +57,8 @@ const SAVE_SLOT_KEYS = [
 const FLOOR_GHOST_KEY = 'swordmasters-floor-ghosts';
 const TUTORIAL_KEY    = 'swordmasters-ascent-tutorial-done';
 const HIGH_SCORE_KEY  = 'swordmasters-ascent-highscore';
+const BATTLE_CANVAS_WIDTH = 1280;
+const BATTLE_CANVAS_HEIGHT = 720;
 
 function loadHighScore(): number {
   if (typeof window === 'undefined') return 0;
@@ -66,6 +68,57 @@ function saveHighScore(score: number) {
   if (typeof window === 'undefined') return;
   const prev = loadHighScore();
   if (score > prev) localStorage.setItem(HIGH_SCORE_KEY, String(score));
+}
+
+function BattleViewport({ children }: { children: ReactNode }) {
+  const [viewport, setViewport] = useState({
+    width: BATTLE_CANVAS_WIDTH,
+    height: BATTLE_CANVAS_HEIGHT,
+  });
+
+  useEffect(() => {
+    const syncViewport = () => {
+      setViewport({
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+    };
+
+    syncViewport();
+    window.addEventListener('resize', syncViewport);
+    window.addEventListener('orientationchange', syncViewport);
+    return () => {
+      window.removeEventListener('resize', syncViewport);
+      window.removeEventListener('orientationchange', syncViewport);
+    };
+  }, []);
+
+  const scale = Math.min(
+    viewport.width / BATTLE_CANVAS_WIDTH,
+    viewport.height / BATTLE_CANVAS_HEIGHT,
+  );
+  const scaledWidth = Math.round(BATTLE_CANVAS_WIDTH * scale);
+  const scaledHeight = Math.round(BATTLE_CANVAS_HEIGHT * scale);
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center overflow-hidden bg-gray-950"
+      style={{ width: '100vw', height: '100vh' }}
+    >
+      <div className="relative overflow-hidden" style={{ width: scaledWidth, height: scaledHeight }}>
+        <div
+          style={{
+            width: BATTLE_CANVAS_WIDTH,
+            height: BATTLE_CANVAS_HEIGHT,
+            transform: `scale(${scale})`,
+            transformOrigin: 'top left',
+          }}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const UNLOCKS_KEY = 'swordmasters-unlocks';
@@ -2991,8 +3044,9 @@ export default function SwordmastersAscent() {
   const enemyRight   = Math.round(1280 - enemyLeft   - enemySize);
 
   return (
-    <div className={`w-[1280px] h-[720px] relative overflow-hidden${screenShake ? ' animate-screen-shake' : ''}`}
-      style={{ background: '#050508' }}>
+    <BattleViewport>
+    <div className={`relative overflow-hidden${screenShake ? ' animate-screen-shake' : ''}`}
+      style={{ width: BATTLE_CANVAS_WIDTH, height: BATTLE_CANVAS_HEIGHT, background: '#050508' }}>
 
       {/* ══════ 배경 이미지 ══════ */}
       <img src="/bg/background.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none" />
@@ -3233,5 +3287,6 @@ export default function SwordmastersAscent() {
         onCancelSub={() => { setPlayerMain(null); setCombatStep('select_main'); }}
       />
     </div>
+    </BattleViewport>
   );
 }
