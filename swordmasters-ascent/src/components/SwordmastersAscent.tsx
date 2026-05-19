@@ -17,7 +17,7 @@ import {
   COMBAT_ROW_DEFAULT, COMBAT_ROW_MIN, COMBAT_ROW_MAX,
   CONDITION_LABELS, CONDITION_COLORS, rollCondition,
   getActionRange,
-  UnlockKey, StartBuild, UNLOCK_CONDITIONS,
+  UnlockKey,
   Injury, getBodyInjuryStaminaDrain,
 } from '@/lib/gameData';
 
@@ -2014,14 +2014,11 @@ function TutorialScreen({ onComplete }: { onComplete: () => void }) {
   );
 }
 
-function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial, unlockedKeys, selectedBuild, setSelectedBuild }: {
+function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial }: {
   highScore: number;
   onSelectSlot: (slotIndex: number) => void;
   onNewGame: (slotIndex: number) => void;
   onTutorial: () => void;
-  unlockedKeys: Set<UnlockKey>;
-  selectedBuild: StartBuild;
-  setSelectedBuild: (b: StartBuild) => void;
 }) {
   const [metas, setMetas] = useState<ReturnType<typeof getAllSlotMetas>>([null, null, null]);
   const [confirm, setConfirm] = useState<{ slot: number; mode: 'delete' | 'new' } | null>(null);
@@ -2156,64 +2153,6 @@ function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial, unlockedK
             </div>
           );
         })}
-      </div>
-
-      {/* 시작 빌드 선택 */}
-      <div className="hidden mt-4 mb-2 px-5 w-full max-w-xs">
-        <div className="text-xs text-gray-500 font-bold uppercase tracking-widest mb-2">시작 빌드</div>
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            onClick={() => setSelectedBuild('default')}
-            className={`text-left px-3 py-2 rounded-lg border text-sm transition-all ${
-              selectedBuild === 'default'
-                ? 'border-yellow-600 bg-yellow-950/40 text-yellow-200'
-                : 'border-gray-700/50 bg-gray-900/40 text-gray-400 hover:border-gray-600'
-            }`}
-          >
-            <span className="font-bold">기본 검사</span>
-            <span className="text-xs text-gray-500 ml-2">— 표준 능력치 시작</span>
-          </button>
-
-          {UNLOCK_CONDITIONS.filter(u => u.key !== 'unlock_hard_mode').map(uc => {
-            const buildMap: Record<UnlockKey, StartBuild> = {
-              unlock_assassin: 'assassin',
-              unlock_magic_start: 'magic_start',
-              unlock_arcane: 'arcane',
-              unlock_tank: 'tank',
-              unlock_hard_mode: 'default',
-            };
-            const isUnlocked = unlockedKeys.has(uc.key);
-            const build = buildMap[uc.key];
-            return (
-              <button
-                key={uc.key}
-                type="button"
-                disabled={!isUnlocked}
-                onClick={() => isUnlocked && setSelectedBuild(build)}
-                className={`text-left px-3 py-2 rounded-lg border text-sm transition-all ${
-                  !isUnlocked
-                    ? 'border-gray-800/40 bg-gray-950/20 text-gray-700 cursor-not-allowed'
-                    : selectedBuild === build
-                    ? 'border-yellow-600 bg-yellow-950/40 text-yellow-200'
-                    : 'border-gray-700/50 bg-gray-900/40 text-gray-300 hover:border-gray-600'
-                }`}
-              >
-                {isUnlocked ? (
-                  <>
-                    <span className="font-bold text-yellow-300">{uc.label}</span>
-                    <span className="text-xs text-gray-400 block mt-0.5">{uc.description}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="font-bold text-gray-600">???</span>
-                    <span className="text-xs text-gray-700 block mt-0.5">{uc.hint}</span>
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* 튜토리얼 버튼 */}
@@ -2386,7 +2325,6 @@ export default function SwordmastersAscent() {
   const [enemyMoveDir,  setEnemyMoveDir]  = useState<'forward' | 'back' | null>(null);
   const [currentEvent, setCurrentEvent]   = useState<FloorEvent | null>(null);
   const [unlockedKeys, setUnlockedKeys] = useState<Set<UnlockKey>>(() => loadUnlocks());
-  const [selectedBuild, setSelectedBuild] = useState<StartBuild>('default');
   const prevPlayerPos = useRef(playerPos);
   const prevEnemyPos  = useRef(enemyPos);
   useEffect(() => {
@@ -2903,7 +2841,7 @@ export default function SwordmastersAscent() {
   // ════════════════════════════════════════════════════════
 
   if (phase === 'start') return (
-    <div className="min-h-screen"><StartScreen highScore={highScore} onSelectSlot={handleSlotSelect} onNewGame={handleNewGame} onTutorial={() => setPhase('tutorial')} unlockedKeys={unlockedKeys} selectedBuild={selectedBuild} setSelectedBuild={setSelectedBuild} /></div>
+    <div className="min-h-screen"><StartScreen highScore={highScore} onSelectSlot={handleSlotSelect} onNewGame={handleNewGame} onTutorial={() => setPhase('tutorial')} /></div>
   );
 
   if (phase === 'tutorial') return (
