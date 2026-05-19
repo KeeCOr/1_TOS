@@ -1,6 +1,6 @@
 {
   "name": "tos-swordmasters-ascent",
-  "version": "1.5.57",
+  "version": "1.5.58",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint",
     "electron": "electron .",
-    "dist": "node scripts/bump-version.js && node scripts/clean-release.js && next build && electron-builder --win portable --x64",
+    "dist": "node scripts/bump-version.js && node scripts/clean-release.js && next build && electron-builder --win portable --x64 && node scripts/copy-release-to-root.js",
     "html": "next build && node scripts/build-singlefile.js"
   },
   "build": {

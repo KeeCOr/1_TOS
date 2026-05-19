@@ -2,7 +2,8 @@
 const fs = require('fs');
 const path = require('path');
 
-const releaseDir = path.join(__dirname, '..', 'release');
+const outerRoot = path.resolve(__dirname, '..', '..');
+const releaseDir = path.join(outerRoot, 'release');
 
 if (!fs.existsSync(releaseDir)) {
   fs.mkdirSync(releaseDir, { recursive: true });
