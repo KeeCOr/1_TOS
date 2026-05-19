@@ -3004,8 +3004,14 @@ export default function SwordmastersAscent() {
   const eTL = Math.max(0, Math.min(1, laneCenter(enemyRow) + (sameCell ? 0.055 : 0)));
   const pC  = gPt(pTD, pTL);
   const eC  = gPt(eTD, eTL);
-  const playerSize   = Math.round(330 - (playerPos - 1) * 28); // pos1=330, pos5=218
-  const enemySize    = Math.round(330 - (enemyPos  - 1) * 28);
+  const perspectiveSize = (depth: number) => {
+    const near = 318;
+    const far = 168;
+    const t = Math.max(0, Math.min(1, (depth - 0.1) / 0.8));
+    return Math.round(near - (near - far) * Math.pow(t, 0.72));
+  };
+  const playerSize   = perspectiveSize(pTD);
+  const enemySize    = perspectiveSize(eTD);
   const playerVisualCenterOffset = -131 / 2048 * playerSize;
   const enemyVisualCenterOffset = 29 / 1024 * enemySize;
   const playerBottomPad = 89 / 2048 * playerSize;
