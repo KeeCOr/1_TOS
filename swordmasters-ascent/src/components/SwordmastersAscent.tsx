@@ -2253,7 +2253,6 @@ function NameInputScreen({ onComplete }: { onComplete: (name: string) => void })
     <div className="flex flex-col items-center gap-6 p-8 bg-gray-950 text-white rounded-lg min-h-[380px] justify-center">
       <div className="text-5xl">⚔️</div>
       <h2 className="text-2xl font-bold text-yellow-400">검사의 이름</h2>
-      <p className="text-gray-500 text-sm text-center">전설에 새겨질 이름을 입력하세요</p>
       <input
         type="text"
         value={name}
