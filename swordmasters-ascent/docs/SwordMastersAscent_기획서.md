@@ -5,6 +5,15 @@
 
 ---
 
+
+---
+
+## 플레이 미리보기
+
+### 플레이 미리보기
+![플레이 미리보기](./../../docs/SwordMastersAscent_gameplay_preview.png)
+
+---
 ## 1. 게임 개요
 
 | 항목 | 내용 |
