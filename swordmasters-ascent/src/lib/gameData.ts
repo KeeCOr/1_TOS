@@ -414,6 +414,7 @@ export interface Character {
   injuries?: Injury[];
   phase2Triggered?: boolean; // 보스 왕 2페이즈 전용
   bossPattern?: 'wrath' | 'riposte' | 'judge' | 'king';
+  imageId?: string;
   isLegacy?: boolean;
   isBoss?: boolean;
   actionWeights?: Record<ActionType, number>;
@@ -1561,6 +1562,7 @@ export function generateEnemy(floor: number, legacyCharacters: Character[], floo
       equipment: [], inventory: [], magicSlots: [spell],
       weaponRange: 1,
       titles: [], equippedTitle: null, isLegacy: false, isBoss: false,
+      imageId: 'goblin',
       actionWeights: { '공격': 40, '이동': 25, '방어': 20, '마법 사용': 15, '아이템 사용': 0 },
       abilities: [],
     };
@@ -1621,6 +1623,7 @@ export function generateEnemy(floor: number, legacyCharacters: Character[], floo
     titles: [], equippedTitle: null, isLegacy: false,
     isBoss: template.isBoss,
     bossPattern: template.bossPattern,
+    imageId: template.id,
     actionWeights: adjustedWeights,
     abilities: chosenAbilities,
   };

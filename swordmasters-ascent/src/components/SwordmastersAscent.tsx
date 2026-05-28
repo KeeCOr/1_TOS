@@ -272,6 +272,43 @@ function CharImage({
   );
 }
 
+const ENEMY_IMAGE_IDS = [
+  'arcane_swordsman',
+  'knight_swordsman',
+  'swift_swordsman',
+  'duelist_swordsman',
+  'orc_warrior',
+  'dark_mage',
+  'executioner',
+  'samurai_boss',
+  'elder_boss',
+  'judge_boss',
+  'king_boss',
+  'goblin',
+] as const;
+
+function getEnemyImageSrc(enemy: Character): string {
+  if (enemy.isLegacy) return '/chars/ghost.png';
+
+  const explicit = (enemy as Character & { imageId?: string }).imageId;
+  const rawId = String(explicit ?? (enemy as Character & { id?: string }).id ?? '');
+  if (rawId.startsWith('floor1_rival')) return '/chars/goblin.png';
+
+  const imageId = ENEMY_IMAGE_IDS.find((candidate) =>
+    rawId === candidate || rawId.startsWith(`${candidate}_`)
+  );
+
+  return imageId ? `/chars/${imageId}.png` : '/enemy/enemy.png';
+}
+
+function ActionGlyph({ icon }: { icon: string }) {
+  return (
+    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/15 bg-black/35 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
+      <span className="text-lg leading-none drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">{icon}</span>
+    </span>
+  );
+}
+
 
 function FloatingLayer({ texts, side }: { texts: FloatingText[]; side: 'player' | 'enemy' }) {
   return (
@@ -475,7 +512,7 @@ function BattleGrid({
             <div className="flex items-center gap-2 mb-2 flex-row-reverse">
               <div className="shrink-0 w-9 h-9 flex items-center justify-center">
                 <CharImage
-                  src={enemy.isLegacy ? '/chars/ghost.png' : `/chars/${enemy.id ?? 'enemy'}.png`}
+                  src={getEnemyImageSrc(enemy)}
                   fallback={enemy.isLegacy ? '👻' : enemy.isBoss ? '💀' : '⚔️'}
                   size={36}
                   glow={eFlash ? 'rgba(234,179,8,0.9)' : 'rgba(239,68,68,0.65)'} flash={eFlash} />
@@ -581,7 +618,7 @@ function BattleGrid({
                       {isPlayer
                         ? <CharImage src="/chars/player.png" fallback="🛡️" size={28} glow={pFlash?'rgba(239,68,68,0.9)':'rgba(96,165,250,0.7)'} flash={pFlash} />
                         : isEnemy
-                        ? <CharImage src={enemy.isLegacy?'/chars/ghost.png':`/chars/${(enemy as Character & {id?:string}).id??'enemy'}.png`} fallback={enemy.isLegacy?'👻':enemy.isBoss?'💀':'⚔️'} size={28} glow={eFlash?'rgba(234,179,8,0.9)':'rgba(239,68,68,0.7)'} flash={eFlash} />
+                        ? <CharImage src={getEnemyImageSrc(enemy)} fallback={enemy.isLegacy?'👻':enemy.isBoss?'💀':'⚔️'} size={28} glow={eFlash?'rgba(234,179,8,0.9)':'rgba(239,68,68,0.7)'} flash={eFlash} />
                         : (isPlayerRow||isEnemyRow) ? <span className="text-[8px] text-gray-700 font-bold">{pos}</span>
                         : <span className="text-[6px] text-gray-800">·</span>}
                     </div>
@@ -1000,7 +1037,7 @@ function BattleCommandPanel({
                 }`}
                 style={{ background: disabled ? 'rgba(20,20,30,0.7)' : outOfRange ? 'rgba(90,45,10,0.75)' : bg,
                   borderColor: disabled ? 'rgba(60,60,80,0.5)' : outOfRange ? 'rgba(160,80,20,0.7)' : border }}>
-                <span className="text-xl shrink-0">{icon}</span>
+                <ActionGlyph icon={icon} />
                 <div className="min-w-0">
                   <div className={`truncate text-sm font-black leading-tight ${disabled ? 'text-gray-600' : outOfRange ? 'text-orange-300' : 'text-white'}`}>{action}</div>
                   <div className={`truncate text-[9px] leading-none ${disabled ? 'text-gray-700' : outOfRange ? 'text-orange-500' : 'text-gray-400'}`}>
@@ -3140,7 +3177,7 @@ export default function SwordmastersAscent() {
           transition: 'left 0.4s cubic-bezier(0.34,1.2,0.64,1), bottom 0.4s cubic-bezier(0.34,1.2,0.64,1)',
           filter: enemyMoveDir === 'forward' ? 'brightness(1.4)' : enemyMoveDir === 'back' ? 'brightness(0.8)' : undefined,
         }}>
-        <CharImage src="/enemy/enemy.png" fallback={enemy.isBoss ? '💀' : '⚔️'} size={enemySize}
+        <CharImage src={getEnemyImageSrc(enemy)} fallback={enemy.isBoss ? '💀' : '⚔️'} size={enemySize}
           glow={eFlash ? 'rgba(234,179,8,0.7)' : 'rgba(239,68,68,0.2)'} flash={eFlash} />
       </div>
 
