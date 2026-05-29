@@ -1012,7 +1012,7 @@ function BattleTopBar({
         </div>
       </div>
 
-      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+      <div className="pointer-events-auto rounded-lg p-2 min-w-0" style={HUD_PANEL_STYLE}>
         <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="text-[11px] text-red-300 font-black truncate">{enemy.name}</span>
@@ -1388,9 +1388,8 @@ function BattleTacticalConsole({
   const likelyInfo = SUB_ACTION_INFO[likelySub];
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 z-30 grid grid-cols-[320px_1fr_240px] gap-3 px-4 pb-4 pointer-events-auto"
-      style={{ background: 'linear-gradient(to top, rgba(0,0,0,0.86) 0%, rgba(0,0,0,0.48) 72%, transparent 100%)' }}>
-      <div className="rounded-lg p-2.5 min-w-0 max-h-[190px] overflow-hidden" style={HUD_PANEL_STYLE}>
+    <div className="pointer-events-none absolute bottom-0 left-0 right-0 z-30 grid grid-cols-[300px_1fr_230px] items-end gap-3 px-3 pb-3">
+      <div className="pointer-events-auto rounded-lg p-2 min-w-0 max-h-[176px] overflow-hidden" style={HUD_PANEL_STYLE}>
         <BattleCommandPanel
           combatStep={combatStep}
           playerMain={playerMain}
@@ -1409,7 +1408,7 @@ function BattleTacticalConsole({
           onCancelSub={onCancelSub}
         />
       </div>
-      <div className="pointer-events-auto rounded-lg p-2 min-w-0" style={HUD_PANEL_STYLE}>
+      <div className="pointer-events-auto justify-self-center rounded-lg p-2 min-w-0 w-full max-w-[420px]" style={HUD_PANEL_STYLE}>
         <div className="flex h-full min-w-0 flex-col justify-end gap-2">
           <div className="min-w-0 rounded border border-red-900/45 bg-red-950/30 px-2.5 py-1.5">
             <div className="flex min-w-0 items-center gap-2">
@@ -1430,7 +1429,7 @@ function BattleTacticalConsole({
           <BattleLog logs={logs} compact />
         </div>
       </div>
-      <div className="rounded-lg p-2.5 min-w-0 max-h-[190px] overflow-hidden" style={HUD_PANEL_STYLE}>
+      <div className="pointer-events-auto rounded-lg p-2 min-w-0 max-h-[176px] overflow-hidden" style={HUD_PANEL_STYLE}>
         <BattleDetailPanel
           player={player}
           enemy={enemy}
@@ -3206,10 +3205,10 @@ export default function SwordmastersAscent() {
       {/* ══════ 그라디언트 오버레이 ══════ */}
       {/* 좌우 캐릭터 뒤 어두운 무대 — 흰 배경 이미지를 자연스럽게 흡수 */}
       <div className="absolute inset-0 pointer-events-none"
-        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.45) 22%, transparent 38%, transparent 62%, rgba(0,0,0,0.45) 78%, rgba(0,0,0,0.82) 100%)' }} />
+        style={{ background: 'linear-gradient(to right, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.26) 18%, transparent 34%, transparent 66%, rgba(0,0,0,0.26) 82%, rgba(0,0,0,0.62) 100%)' }} />
       {/* 상하 UI 영역 어둡게 */}
       <div className="absolute inset-0 pointer-events-none"
-        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.78) 0%, transparent 20%, transparent 52%, rgba(0,0,0,0.94) 100%)' }} />
+        style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.46) 0%, transparent 16%, transparent 68%, rgba(0,0,0,0.58) 100%)' }} />
 
       {/* ══════ 주사위 패널 — 캐릭터 사이 중앙 오버레이 ══════ */}
       {(combatStep === 'rolling' || combatStep === 'result') && turnResult && (
