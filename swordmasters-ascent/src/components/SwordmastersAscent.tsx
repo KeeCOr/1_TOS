@@ -898,6 +898,10 @@ function formatSubActionForView(sub: SubAction): string {
   const meta = VIEW_MOVE_META[sub];
   return meta ? `${meta.icon} ${sub} (${meta.label})` : sub;
 }
+function getActionForSub(sub: SubAction, fallback: ActionType): ActionType {
+  const actionOrder: ActionType[] = ['공격', '방어', '이동', '마법 사용', '아이템 사용'];
+  return actionOrder.find((action) => (SUB_ACTIONS[action] as SubAction[]).includes(sub)) ?? fallback;
+}
 const QUALITY_COLOR: Record<MatchQuality, string> = {
   perfect: 'text-yellow-300', partial: 'text-blue-300', miss: 'text-red-400',
 };
@@ -2664,8 +2668,9 @@ export default function SwordmastersAscent() {
   const handleSubSelect = useCallback((sub: SubAction) => {
     if (!player || !enemy || !intent || !playerMain) return;
 
+    const resolvedPlayerMain = getActionForSub(sub, playerMain);
     const { magicDamageBonus, rangedDamageBonus } = getEffectiveStatsWithSynergy(player);
-    const result = resolveTurn(playerMain, sub, enemy, intent, player, playerPos, enemyPos, playerRow, enemyRow, magicDamageBonus, rangedDamageBonus);
+    const result = resolveTurn(resolvedPlayerMain, sub, enemy, intent, player, playerPos, enemyPos, playerRow, enemyRow, magicDamageBonus, rangedDamageBonus);
 
     // Show rolling animation first (req #2)
     setTurnResult(result);
@@ -2676,7 +2681,7 @@ export default function SwordmastersAscent() {
       // ── Phase 1 (t=1900ms): 주사위 완전 종료 + 상태 전체 업데이트 ──
       setDiceRolling(false);
       setCombatStep('result');
-      setLastPlayerMain(playerMain);
+      setLastPlayerMain(resolvedPlayerMain);
       setLastPlayerSub(sub);
 
       // 위치 업데이트
@@ -2717,11 +2722,11 @@ export default function SwordmastersAscent() {
       let newEnemyHp  = enemy.hp  - result.damageDealt;
       const playerMpRegen = getMagicRegenByProgress(floor, player);
       const playerSpellCost = getMagicCostByProgress(floor, player);
-      let newPlayerMp = Math.min(player.maxMp, Math.max(0, player.mp + playerMpRegen - (playerMain === '마법 사용' ? playerSpellCost : 0)));
+      let newPlayerMp = Math.min(player.maxMp, Math.max(0, player.mp + playerMpRegen - (resolvedPlayerMain === '마법 사용' ? playerSpellCost : 0)));
       const extraEnemyMp = enemy.abilities?.reduce((sum, a) => sum + (a.mpRegen ?? 0), 0) ?? 0;
       const newEnemyMp = Math.min(enemy.maxMp, enemy.mp + 5 + extraEnemyMp);
       let nextCooldown = magicCooldown;
-      if (playerMain === '마법 사용') {
+      if (resolvedPlayerMain === '마법 사용') {
         nextCooldown = getMagicCooldownByProgress(floor, player) + 1;
       } else if (nextCooldown > 0) {
         nextCooldown = Math.max(0, nextCooldown - 1);
@@ -2730,20 +2735,20 @@ export default function SwordmastersAscent() {
 
       // 스태미나 계산
       const playerAttackDoubleLoss =
-        playerMain === '공격' &&
+        resolvedPlayerMain === '공격' &&
         result.speedContest?.winner === 'enemy' &&
         result.strengthContest?.winner === 'enemy';
       const enemyAttackDoubleLoss =
         intent.mainAction === '공격' &&
         result.speedContest?.winner === 'player' &&
         result.strengthContest?.winner === 'player';
-      const playerStamDelta = playerMain === '방어' && !result.strengthContest
+      const playerStamDelta = resolvedPlayerMain === '방어' && !result.strengthContest
         ? getStaminaDelta('이동')
-        : getStaminaDelta(playerMain) - (playerAttackDoubleLoss ? 15 : 0);
+        : getStaminaDelta(resolvedPlayerMain) - (playerAttackDoubleLoss ? 15 : 0);
       const enemyStamDelta = getStaminaDelta(intent.mainAction) - (enemyAttackDoubleLoss ? 15 : 0);
 
       let newStats = { ...stats };
-      if (result.quality === 'perfect' && playerMain === '방어') newStats.perfectBlocks++;
+      if (result.quality === 'perfect' && resolvedPlayerMain === '방어') newStats.perfectBlocks++;
 
       const updatedEnemy  = {
         ...enemy,
@@ -2789,7 +2794,7 @@ export default function SwordmastersAscent() {
       let mutableEnemy = tickStatusEffects(updatedEnemy);
       mutableEnemy = addStatusEffects(mutableEnemy, result.newEnemyEffects);
       // 아이템 소모 (모든 아이템은 사용 후 1개 제거)
-      if (playerMain === '아이템 사용') {
+      if (resolvedPlayerMain === '아이템 사용') {
         const usedIdx = updatedPlayer.inventory.findIndex(it => it.name === sub);
         if (usedIdx >= 0) {
           const newInv = [...updatedPlayer.inventory];
@@ -3044,7 +3049,7 @@ export default function SwordmastersAscent() {
   const eFlash  = hitFlash === 'enemy'  || hitFlash === 'both';
 
   // 서브 액션 옵션 계산
-  const subOpts: SubAction[] = playerMain
+  let subOpts: SubAction[] = playerMain
     ? (playerMain === '마법 사용' && player.magicSlots.length > 0
         ? (player.magicSlots as SubAction[])
         : playerMain === '아이템 사용' && player.inventory.length > 0
@@ -3076,6 +3081,11 @@ export default function SwordmastersAscent() {
       : all[0];
   })();
   const perfectSub = PERFECT_COUNTER[likelySub];
+  if (playerMain === '공격' && likelySub === '세로 베기') {
+    const verticalCounter = PERFECT_COUNTER[likelySub];
+    subOpts = [...subOpts.filter((sub) => sub !== '세로 베기'), verticalCounter]
+      .filter((sub, index, list) => list.indexOf(sub) === index);
+  }
   const rowSame = playerRow === enemyRow;
   const intentHint = `${ACTION_ICONS[intent.mainAction]} ${formatSubActionForView(likelySub)} · ${SUB_ACTION_INFO[likelySub]?.hint ?? '...'}`;
 
