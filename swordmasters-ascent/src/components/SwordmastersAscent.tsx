@@ -981,11 +981,8 @@ function BattleTopBar({
   const distanceColor = DISTANCE_COLORS[distance] ?? 'text-gray-300';
 
   return (
-    <div
-      className="absolute top-0 left-0 right-0 z-30 grid grid-cols-[300px_1fr_300px] gap-3 px-4 pt-3 pb-4 pointer-events-auto"
-      style={{ background: 'linear-gradient(to bottom, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.58) 66%, transparent 100%)' }}
-    >
-      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+    <div className="pointer-events-none absolute top-0 left-0 right-0 z-30 grid grid-cols-[270px_1fr_270px] items-start gap-3 px-3 pt-3">
+      <div className="pointer-events-auto rounded-lg p-2 min-w-0" style={HUD_PANEL_STYLE}>
         <div className="flex items-center gap-2 mb-2 min-w-0">
           <StatusPill tone="warn">{floor}F</StatusPill>
           <span className="text-[11px] text-gray-300 truncate">Lv.<b>{player.level}</b> {player.name}</span>
@@ -1005,7 +1002,7 @@ function BattleTopBar({
         </div>
       </div>
 
-      <div className="rounded-lg px-4 py-3 flex flex-col items-center justify-center min-w-0" style={HUD_PANEL_STYLE}>
+      <div className="pointer-events-auto justify-self-center rounded-lg px-3 py-2 flex max-w-[360px] flex-col items-center justify-center min-w-0" style={HUD_PANEL_STYLE}>
         <div className="flex items-center gap-2 mb-1">
           <span className={`text-lg font-black ${distanceColor}`}>{distanceLabel}</span>
           <StatusPill tone={rowSame ? 'warn' : 'neutral'}>{rowSame ? '⚔ 같은행' : '↕ 분리'}</StatusPill>
@@ -1412,7 +1409,7 @@ function BattleTacticalConsole({
           onCancelSub={onCancelSub}
         />
       </div>
-      <div className="rounded-lg p-2.5 min-w-0" style={HUD_PANEL_STYLE}>
+      <div className="pointer-events-auto rounded-lg p-2 min-w-0" style={HUD_PANEL_STYLE}>
         <div className="flex h-full min-w-0 flex-col justify-end gap-2">
           <div className="min-w-0 rounded border border-red-900/45 bg-red-950/30 px-2.5 py-1.5">
             <div className="flex min-w-0 items-center gap-2">
