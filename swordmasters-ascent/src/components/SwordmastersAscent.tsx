@@ -2335,14 +2335,6 @@ function NameInputScreen({ onComplete }: { onComplete: (name: string) => void })
         autoFocus
         className="w-full max-w-xs text-center text-xl font-bold bg-gray-800 border-2 border-yellow-700 focus:border-yellow-400 rounded-lg px-4 py-3 text-white outline-none transition-colors placeholder:text-gray-600"
       />
-      <div className="flex flex-wrap gap-2 justify-center max-w-xs">
-        {PRESET_NAMES.map(n => (
-          <button key={n} onClick={() => setName(n)}
-            className="text-xs bg-gray-800 hover:bg-gray-700 border border-gray-600 hover:border-yellow-600 text-gray-300 hover:text-yellow-300 px-3 py-1.5 rounded-lg transition-all">
-            {n}
-          </button>
-        ))}
-      </div>
       <button onClick={handleConfirm}
         className="w-full max-w-xs bg-yellow-700 hover:bg-yellow-600 active:scale-95 font-bold py-3 px-6 rounded-lg text-white text-lg transition-all">
         {name.trim() ? `${name.trim()} 으로 시작` : '검사로 시작'} →
