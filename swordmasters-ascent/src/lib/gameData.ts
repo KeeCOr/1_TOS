@@ -1216,8 +1216,14 @@ export function resolveTurn(
   // ── 행(Y축) 이동 및 miss 판정 ────────────────────────────────
   const newPlayerRow = calcNewRow(playerSub, playerRow);
   const newEnemyRow  = calcNewRow(intent.subAction, enemyRow);
-  const playerRowMiss = !isAttackHitByRow(playerMain, newPlayerRow, newEnemyRow);
-  const enemyRowMiss  = !isAttackHitByRow(intent.mainAction, newEnemyRow, newPlayerRow);
+  const rowsWereAligned = playerRow === enemyRow;
+  const rowsAreAligned = newPlayerRow === newEnemyRow;
+  const playerShiftedRow = newPlayerRow !== playerRow;
+  const enemyShiftedRow = newEnemyRow !== enemyRow;
+  const playerRowMiss = playerMain === '공격' && !rowsAreAligned &&
+    (!rowsWereAligned || (enemyShiftedRow && speedContest.winner === 'enemy'));
+  const enemyRowMiss = intent.mainAction === '공격' && !rowsAreAligned &&
+    (!rowsWereAligned || (playerShiftedRow && speedContest.winner === 'player'));
 
   if (playerRowMiss && damageDealt > 0) {
     damageDealt = 0; message = '행 이동으로 공격이 빗나갔다!';
