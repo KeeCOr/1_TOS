@@ -868,6 +868,36 @@ function StatRollScreen({ onComplete, highScore, playerName }: {
 const ACTION_ICONS: Record<ActionType, string> = {
   '공격': '⚔️', '방어': '🛡️', '이동': '👣', '마법 사용': '✨', '아이템 사용': '🎒',
 };
+const VIEW_MOVE_META: Partial<Record<SubAction, { icon: string; label: string; desc: string; tone: string }>> = {
+  '전진 압박': {
+    icon: '↗',
+    label: '원경 쪽',
+    desc: '적 방향으로 깊게 압박',
+    tone: 'border-green-700/50 bg-green-950/45 text-green-300',
+  },
+  '후퇴': {
+    icon: '↙',
+    label: '카메라 쪽',
+    desc: '앞쪽으로 빠져 거리 확보',
+    tone: 'border-orange-700/50 bg-orange-950/45 text-orange-300',
+  },
+  '위로 이동': {
+    icon: '↖',
+    label: '좌상단 행',
+    desc: '화면 기준 왼쪽 위 행 이동',
+    tone: 'border-sky-700/50 bg-sky-950/45 text-sky-300',
+  },
+  '아래로 이동': {
+    icon: '↘',
+    label: '우하단 행',
+    desc: '화면 기준 오른쪽 아래 행 이동',
+    tone: 'border-cyan-700/50 bg-cyan-950/45 text-cyan-300',
+  },
+};
+function formatSubActionForView(sub: SubAction): string {
+  const meta = VIEW_MOVE_META[sub];
+  return meta ? `${meta.icon} ${sub} (${meta.label})` : sub;
+}
 const QUALITY_COLOR: Record<MatchQuality, string> = {
   perfect: 'text-yellow-300', partial: 'text-blue-300', miss: 'text-red-400',
 };
@@ -1132,6 +1162,7 @@ function BattleCommandPanel({
           const isPerfect = sub === perfectSub;
           const isMiss    = !isPerfect && PERFECT_COUNTER[sub] === likelySub;
           const diceMods = SUB_ACTION_DICE_MODIFIERS[sub] ?? {};
+          const moveMeta = playerMain === '이동' ? VIEW_MOVE_META[sub] : undefined;
           const hasDiceMods = diceMods.speed !== undefined || diceMods.strength !== undefined;
           const baseStrDice = getDiceCount(playerStats.strength, enemyStats.strength);
           const strDicePreview = playerMain === '공격' || playerMain === '방어'
@@ -1149,6 +1180,7 @@ function BattleCommandPanel({
                 <span className="max-w-full truncate text-sm font-bold leading-tight">
                   {isPerfect && <span className="text-yellow-400 mr-1">★</span>}
                   {isMiss    && <span className="text-red-500 mr-1">✗</span>}
+                  {moveMeta && <span className="mr-1.5 text-base leading-none">{moveMeta.icon}</span>}
                   {sub}
                 </span>
                 <span className={`max-w-full truncate text-[9px] leading-tight mt-0.5 ${
@@ -1156,8 +1188,13 @@ function BattleCommandPanel({
                 }`}>
                   {isPerfect ? `카운터 — 힘싸움 +1주사위` :
                    isMiss    ? `역카운터 — 힘싸움 -1주사위` :
-                               SUB_ACTION_INFO[sub]?.desc ?? ''}
+                               moveMeta?.desc ?? SUB_ACTION_INFO[sub]?.desc ?? ''}
                 </span>
+                {moveMeta && (
+                  <span className={`mt-1 rounded border px-1.5 py-0.5 text-[8px] font-black leading-none ${moveMeta.tone}`}>
+                    뷰 기준 {moveMeta.label}
+                  </span>
+                )}
                 {hasDiceMods && (
                   <span className="mt-1 flex max-w-full flex-wrap gap-1">
                     {diceMods.speed !== undefined && (
@@ -1418,7 +1455,7 @@ function BattleTacticalConsole({
                   상대 예상 행동
                 </div>
                 <div className="truncate text-[11px] font-black text-red-100">
-                  {enemyMainAction} / {likelySub}
+                  {enemyMainAction} / {formatSubActionForView(likelySub)}
                 </div>
                 <div className="truncate text-[9px] text-red-400/80">
                   힌트: {likelyInfo?.hint ?? likelyInfo?.desc ?? '상대의 움직임을 읽는 중'}
@@ -3040,7 +3077,7 @@ export default function SwordmastersAscent() {
   })();
   const perfectSub = PERFECT_COUNTER[likelySub];
   const rowSame = playerRow === enemyRow;
-  const intentHint = `${ACTION_ICONS[intent.mainAction]} ${SUB_ACTION_INFO[likelySub]?.hint ?? '...'}`;
+  const intentHint = `${ACTION_ICONS[intent.mainAction]} ${formatSubActionForView(likelySub)} · ${SUB_ACTION_INFO[likelySub]?.hint ?? '...'}`;
 
   // ── 바닥 원근 그리드 좌표계 ──────────────────────────────────
   // pos1=앞(카메라 가까움·화면 아래), pos5=뒤(원경·화면 위)
