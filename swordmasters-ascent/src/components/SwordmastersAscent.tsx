@@ -359,11 +359,6 @@ function BattleGrid({
   const pBonus      = playerMain ? distanceBonus(playerMain, distance) : null;
   const playerStats = getEffectiveStats(player);
   const enemyStats  = getEffectiveStats(enemy);
-  const elColors    = ['bg-red-600','bg-blue-600','bg-green-600','bg-yellow-600','bg-purple-700'];
-  const elVals      = [
-    enemyStats.elements.fire, enemyStats.elements.water, enemyStats.elements.wind,
-    enemyStats.elements.earth, enemyStats.elements.dark,
-  ];
 
   const pFlash = hitFlash === 'player' || hitFlash === 'both';
   const eFlash = hitFlash === 'enemy'  || hitFlash === 'both';
@@ -426,6 +421,9 @@ function BattleGrid({
                 style={{ width:`${Math.max(0,(player.mp/player.maxMp)*100)}%` }} />
             </div>
             {/* 스테미너 */}
+            <div className="mb-1.5">
+              <PlayerElementBadges elements={playerStats.elements} compact />
+            </div>
             {(() => {
               const stamPct = player.stamina / player.maxStamina;
               const stamLow = stamPct < 0.3;
@@ -553,7 +551,6 @@ function BattleGrid({
               <span className={`text-[9px] ${enemyStats.agility>playerStats.agility?'text-red-400':'text-green-400'}`}>
                 👣<b>{enemyStats.agility}</b>
               </span>
-              {elVals.map((v,i)=>v>0?<span key={i} className={`${elColors[i]} rounded-full px-1 text-[7px] text-white font-bold`}>{v}</span>:null)}
               {enemy.condition && (
                 <span className={`text-[8px] font-bold px-1 rounded-full ${CONDITION_COLORS[enemy.condition]}`}
                   style={{ background:'rgba(0,0,0,0.45)' }}>
@@ -782,7 +779,13 @@ function StatRollScreen({ onComplete, highScore, playerName }: {
   const playerRef = useRef(createPlayer(highScore, playerName));
   const finalRef  = useRef(playerRef.current.stats);
 
-  const [display, setDisplay] = useState({ strength:0, agility:0, armor:0, critChance:0 });
+  const [display, setDisplay] = useState({
+    strength: 0,
+    agility: 0,
+    armor: 0,
+    critChance: 0,
+    elements: { fire: 0, water: 0, wind: 0, earth: 0, dark: 0 },
+  });
   const [done, setDone]       = useState(false);
 
   useEffect(() => {
@@ -796,6 +799,13 @@ function StatRollScreen({ onComplete, highScore, playerName }: {
           agility:   Math.floor(Math.random() * 40) + 5,
           armor:     Math.floor(Math.random() * 40),
           critChance: Math.floor(Math.random() * 30),
+          elements: {
+            fire: Math.floor(Math.random() * 30) + 1,
+            water: Math.floor(Math.random() * 30) + 1,
+            wind: Math.floor(Math.random() * 30) + 1,
+            earth: Math.floor(Math.random() * 30) + 1,
+            dark: Math.floor(Math.random() * 30) + 1,
+          },
         });
       } else {
         clearInterval(iv);
@@ -804,6 +814,7 @@ function StatRollScreen({ onComplete, highScore, playerName }: {
           agility:    finalRef.current.agility,
           armor:      finalRef.current.armor,
           critChance: finalRef.current.critChance,
+          elements: finalRef.current.elements,
         });
         setDone(true);
         setTimeout(() => onComplete(playerRef.current), 1200);
@@ -838,6 +849,10 @@ function StatRollScreen({ onComplete, highScore, playerName }: {
             </div>
           );
         })}
+      </div>
+      <div className="w-full max-w-xs rounded-lg border border-gray-700 bg-gray-900/70 p-3">
+        <div className="mb-2 text-[11px] font-black text-gray-400">속성 능력치</div>
+        <PlayerElementBadges elements={display.elements} />
       </div>
       {highScore > 0 && (
         <p className="text-gray-600 text-xs">최고 기록 보너스 +{Math.floor(highScore * 0.1)} 적용됨</p>
@@ -914,6 +929,39 @@ function StatusPill({
   );
 }
 
+const ELEMENT_META = [
+  { key: 'fire', label: '화', short: 'F', className: 'border-red-700/60 bg-red-950/50 text-red-200' },
+  { key: 'water', label: '수', short: 'W', className: 'border-blue-700/60 bg-blue-950/50 text-blue-200' },
+  { key: 'wind', label: '풍', short: 'A', className: 'border-emerald-700/60 bg-emerald-950/50 text-emerald-200' },
+  { key: 'earth', label: '지', short: 'E', className: 'border-yellow-700/60 bg-yellow-950/50 text-yellow-200' },
+  { key: 'dark', label: '암', short: 'D', className: 'border-purple-700/60 bg-purple-950/50 text-purple-200' },
+] as const;
+
+function PlayerElementBadges({
+  elements,
+  compact = false,
+}: {
+  elements: Character['stats']['elements'];
+  compact?: boolean;
+}) {
+  return (
+    <div className={`flex min-w-0 flex-wrap ${compact ? 'gap-1' : 'gap-1.5'}`}>
+      {ELEMENT_META.map(({ key, label, short, className }) => (
+        <span
+          key={key}
+          className={`inline-flex items-center gap-0.5 rounded border font-black leading-none ${className} ${
+            compact ? 'px-1 py-0.5 text-[7px]' : 'px-1.5 py-0.5 text-[8px]'
+          }`}
+          title={`${label} 속성`}
+        >
+          <span>{compact ? short : label}</span>
+          <b className="tabular-nums text-white">{elements[key]}</b>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function BattleTopBar({
   floor, player, enemy, playerStats, enemyStats, distance, rowSame, intentHint,
   magicCooldown, onSave,
@@ -947,6 +995,7 @@ function BattleTopBar({
           <ResourceBar label="HP" value={player.hp} max={player.maxHp} color={player.hp / player.maxHp > 0.25 ? '#ef4444' : '#dc2626'} />
           <ResourceBar label="MP" value={player.mp} max={player.maxMp} color="#60a5fa" compact />
           <ResourceBar label="ST" value={player.stamina} max={player.maxStamina} color={player.stamina / player.maxStamina > 0.5 ? '#ca8a04' : '#ea580c'} compact />
+          <PlayerElementBadges elements={playerStats.elements} compact />
         </div>
         <div className="flex gap-2 flex-wrap pt-1.5">
           <span className="text-[9px] text-gray-400">STR <b className="text-gray-200">{playerStats.strength}</b></span>
@@ -1220,15 +1269,12 @@ function BattleMiniMapPanel({
 }
 
 function BattleDetailPanel({
-  player, enemy, enemyElementValues, enemyElementClasses, magicCooldown,
+  player, enemy, magicCooldown,
 }: {
   player: Character;
   enemy: Character;
-  enemyElementValues: number[];
-  enemyElementClasses: string[];
   magicCooldown: number;
 }) {
-  const enemyHasElements = enemyElementValues.some(v => v > 0);
   const enemyAbilities = enemy.abilities ?? [];
   const enemyActiveEffects = enemy.activeEffects ?? [];
   const activeEffects = player.activeEffects ?? [];
@@ -1236,19 +1282,12 @@ function BattleDetailPanel({
   const injuries = player.injuries ?? [];
   const titles = player.titles.slice(0, 3);
   const hasPlayerTactics = activeEffects.length > 0 || activeSynergies.length > 0 || injuries.length > 0 || titles.length > 0 || magicCooldown > 0;
-  const hasEnemyTactics = enemyHasElements || enemyAbilities.length > 0 || enemyActiveEffects.length > 0;
+  const hasEnemyTactics = enemyAbilities.length > 0 || enemyActiveEffects.length > 0;
 
   return (
     <div className="flex max-h-[170px] min-h-0 min-w-0 flex-col gap-2 overflow-hidden">
       <div className="min-h-0 max-h-[86px] space-y-1 overflow-y-auto overscroll-contain pr-1">
         <div className="text-[9px] uppercase tracking-wide text-gray-500 font-black">Enemy Intel</div>
-        {enemyHasElements && (
-          <div className="flex items-center gap-1 flex-wrap">
-            {enemyElementValues.map((v,i) => v > 0 ? (
-              <span key={i} className={`${enemyElementClasses[i]} rounded px-1.5 py-0.5 text-[8px] text-white font-bold`}>{v}</span>
-            ) : null)}
-          </div>
-        )}
         {enemyAbilities.length > 0 && (
           <div className="space-y-0.5 max-h-16 overflow-y-auto overscroll-contain pr-1">
             {enemyAbilities.map(a => (
@@ -1323,7 +1362,7 @@ function BattleDetailPanel({
 function BattleTacticalConsole({
   combatStep, playerMain, player, enemy, floor, distance, magicCooldown, subOpts,
   subDisabled, perfectSub, likelySub, enemyMainAction, playerStats, enemyStats, playerPos, enemyPos,
-  playerRow, enemyRow, logs, enemyElementValues, enemyElementClasses,
+  playerRow, enemyRow, logs,
   onMainSelect, onSubSelect, onCancelSub,
 }: {
   combatStep: CombatStep;
@@ -1345,8 +1384,6 @@ function BattleTacticalConsole({
   playerRow: number;
   enemyRow: number;
   logs: string[];
-  enemyElementValues: number[];
-  enemyElementClasses: string[];
   onMainSelect: (action: ActionType) => void;
   onSubSelect: (sub: SubAction) => void;
   onCancelSub: () => void;
@@ -1400,8 +1437,6 @@ function BattleTacticalConsole({
         <BattleDetailPanel
           player={player}
           enemy={enemy}
-          enemyElementValues={enemyElementValues}
-          enemyElementClasses={enemyElementClasses}
           magicCooldown={magicCooldown}
         />
       </div>
@@ -2980,8 +3015,6 @@ export default function SwordmastersAscent() {
 
   const eStats  = getEffectiveStats(enemy);
   const pStats  = getEffectiveStats(player);
-  const eEls    = ['bg-red-600','bg-blue-600','bg-green-600','bg-yellow-600','bg-purple-700'];
-  const eElVals = [eStats.elements.fire,eStats.elements.water,eStats.elements.wind,eStats.elements.earth,eStats.elements.dark];
   const pFlash  = hitFlash === 'player' || hitFlash === 'both';
   const eFlash  = hitFlash === 'enemy'  || hitFlash === 'both';
 
@@ -3295,8 +3328,6 @@ export default function SwordmastersAscent() {
         playerRow={playerRow}
         enemyRow={enemyRow}
         logs={logs}
-        enemyElementValues={eElVals}
-        enemyElementClasses={eEls}
         onMainSelect={handleMainSelect}
         onSubSelect={handleSubSelect}
         onCancelSub={() => { setPlayerMain(null); setCombatStep('select_main'); }}
