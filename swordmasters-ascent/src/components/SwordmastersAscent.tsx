@@ -2191,6 +2191,14 @@ function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial }: {
           <div className="h-px flex-1 bg-gray-700" />
         </div>
 
+        {/* Empty State: 모든 슬롯이 비어있을 때 안내 문구 */}
+        {metas.every(m => m === null) && (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl border border-yellow-900/40 bg-yellow-950/20 text-center">
+            <span className="text-yellow-600 text-lg shrink-0">⚔️</span>
+            <span className="text-yellow-600/80 text-xs leading-relaxed">슬롯을 선택해 새 모험을 시작하세요</span>
+          </div>
+        )}
+
         {[0, 1, 2].map(i => {
           const meta = metas[i];
           const isConfirming = confirm?.slot === i;
@@ -2217,11 +2225,11 @@ function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial }: {
                     <div className="text-xs mt-0.5">
                       {meta
                         ? <span className="text-gray-400">{meta.playerName} · {fmt(meta.timestamp)}</span>
-                        : <span className="text-gray-500">새 게임 시작</span>}
+                        : <span className="text-yellow-700/80 font-medium">+ 새 게임 시작하기</span>}
                     </div>
                   </div>
                 </div>
-                <span className={`text-sm font-semibold ${meta ? 'text-blue-300' : 'text-gray-400'}`}>
+                <span className={`text-sm font-semibold ${meta ? 'text-blue-300' : 'text-yellow-600'}`}>
                   {meta ? '계속 ›' : '시작 ›'}
                 </span>
               </button>
@@ -2421,6 +2429,7 @@ export default function SwordmastersAscent() {
   const [screenShake,     setScreenShake]     = useState(false);
   const [injuryVignette,  setInjuryVignette]  = useState(false);
   const [enemyDeathFlash, setEnemyDeathFlash] = useState(false);
+  const [enemyDefeatedBanner, setEnemyDefeatedBanner] = useState(false);
   const [playerMoveDir, setPlayerMoveDir] = useState<'forward' | 'back' | null>(null);
   const [enemyMoveDir,  setEnemyMoveDir]  = useState<'forward' | 'back' | null>(null);
   const [currentEvent, setCurrentEvent]   = useState<FloorEvent | null>(null);
@@ -2668,14 +2677,17 @@ export default function SwordmastersAscent() {
   const handleSubSelect = useCallback((sub: SubAction) => {
     if (!player || !enemy || !intent || !playerMain) return;
 
+    // Doherty Threshold: 즉시 rolling 상태로 전환 (400ms 이내 시각 피드백)
+    setCombatStep('rolling');
+    setDiceRolling(true);
+
+    // 계산은 다음 프레임으로 미뤄 UI가 먼저 반응하게 함
+    setTimeout(() => {
     const resolvedPlayerMain = getActionForSub(sub, playerMain);
     const { magicDamageBonus, rangedDamageBonus } = getEffectiveStatsWithSynergy(player);
     const result = resolveTurn(resolvedPlayerMain, sub, enemy, intent, player, playerPos, enemyPos, playerRow, enemyRow, magicDamageBonus, rangedDamageBonus);
 
-    // Show rolling animation first (req #2)
     setTurnResult(result);
-    setCombatStep('rolling');
-    setDiceRolling(true);
 
     setTimeout(() => {
       // ── Phase 1 (t=1900ms): 주사위 완전 종료 + 상태 전체 업데이트 ──
@@ -2902,7 +2914,10 @@ export default function SwordmastersAscent() {
         checkAndUnlock(floor, enemy.isBoss ?? false);
         setPlayer(updatedPlayer); setEnemy(mutableEnemy);
         setTimeout(showDamageEffects, 500);
-        setTimeout(() => setPhase('reward'), 1200);
+        // Peak-End Rule: 승리 배너 표시 후 보상 화면 진입
+        setEnemyDefeatedBanner(true);
+        setTimeout(() => setEnemyDefeatedBanner(false), 1500);
+        setTimeout(() => setPhase('reward'), 2000);
         return;
       }
 
@@ -2935,6 +2950,7 @@ export default function SwordmastersAscent() {
       // ── Phase 2 (t=2400ms): 데미지 연출 — 주사위 결과 확인 후 등장 ──
       setTimeout(showDamageEffects, 500);
     }, 1900); // 주사위 전체 완전 종료 대기 (최대 delay=550ms → 1200+550+여유=1900ms)
+    }, 0); // UI 즉시 반응 후 계산 (Doherty Threshold 준수)
   }, [player, enemy, intent, playerMain, playerPos, enemyPos, playerRow, enemyRow, distance, stats, floor, magicCooldown, updateHighScore, addLog, showFloat, checkAndUnlock]);
 
   // ════════════════════════════════════════════════════════
@@ -3144,6 +3160,23 @@ export default function SwordmastersAscent() {
           className="absolute inset-0 animate-enemy-death-flash pointer-events-none z-40"
           style={{ background: 'radial-gradient(ellipse at 72% 42%, rgba(255,230,100,0.9) 0%, rgba(255,180,40,0.5) 30%, transparent 62%)' }}
         />
+      )}
+
+      {/* ── Peak-End Rule: 적 처치 승리 배너 ── */}
+      {enemyDefeatedBanner && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+          <div className="animate-victory-banner flex flex-col items-center gap-2">
+            <span className="text-5xl" style={{ filter: 'drop-shadow(0 0 20px rgba(251,191,36,0.9))' }}>⚔️</span>
+            <div className="text-5xl font-black text-yellow-300 tracking-widest"
+              style={{ textShadow: '0 0 32px rgba(251,191,36,0.8), 0 2px 12px rgba(0,0,0,1)' }}>
+              적 처치!
+            </div>
+            <div className="text-lg font-bold text-yellow-500"
+              style={{ textShadow: '0 0 12px rgba(251,191,36,0.5), 0 2px 8px rgba(0,0,0,1)' }}>
+              {floor}층 클리어
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ══════ 바닥 원근 그리드 ══════ */}

@@ -142,3 +142,16 @@
 .animate-enemy-death-flash {
   animation: enemy-death-flash 0.6s ease-out forwards;
 }
+
+/* Peak-End Rule: 적 처치 승리 배너 */
+@keyframes victory-banner {
+  0%   { opacity: 0; transform: scale(0.6); }
+  30%  { opacity: 1; transform: scale(1.15); }
+  55%  { transform: scale(0.97); }
+  70%  { opacity: 1; transform: scale(1); }
+  85%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.05); }
+}
+.animate-victory-banner {
+  animation: victory-banner 1.5s cubic-bezier(0.34, 1.2, 0.64, 1) forwards;
+}
