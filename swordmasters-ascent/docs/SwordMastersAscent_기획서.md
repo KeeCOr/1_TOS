@@ -408,3 +408,28 @@ Draw 판정: 민첩 차이 ≥ 12 → 빠른 쪽 선제(85%/25%). 그 외 힘 �
 ---
 
 *이 기획서는 `/game-designer` 에이전트 호출 시 자동으로 최신 코드와 동기화됩니다.*
+
+<!-- RESOURCE_PREVIEWS_START -->
+## 공유용 이미지 미리보기
+
+> 자동 갱신: 2026-06-04. 공유 시 문서와 함께 아래 이미지 경로가 포함되어야 합니다.
+
+![1_TOS player](../out/chars/player.png)
+- `swordmasters-ascent/out/chars/player.png`
+
+![1_TOS enemy](../out/enemy/enemy.png)
+- `swordmasters-ascent/out/enemy/enemy.png`
+
+![1_TOS player](../public/chars/player.png)
+- `swordmasters-ascent/public/chars/player.png`
+
+![1_TOS enemy](../public/enemy/enemy.png)
+- `swordmasters-ascent/public/enemy/enemy.png`
+
+![1_TOS background](../out/bg/background.png)
+- `swordmasters-ascent/out/bg/background.png`
+
+![1_TOS background](../public/bg/background.png)
+- `swordmasters-ascent/public/bg/background.png`
+
+<!-- RESOURCE_PREVIEWS_END -->
