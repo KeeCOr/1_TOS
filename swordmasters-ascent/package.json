@@ -1,15 +1,16 @@
 {
   "name": "tos-swordmasters-ascent",
-  "version": "1.5.62",
+  "version": "1.5.64",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "test": "node --test tests/*.test.cjs",
     "start": "next start",
     "lint": "eslint",
     "electron": "electron .",
-    "dist": "node scripts/bump-version.js && node scripts/clean-release.js && next build && electron-builder --win portable --x64 && node scripts/copy-release-to-root.js",
+    "dist": "node scripts/bump-version.js && node scripts/clean-release.js && next build && electron-builder --win portable --x64 && node scripts/copy-release-to-root.js && node scripts/upload-release-to-drive.js && node scripts/prune-release-output.js",
     "html": "next build && node scripts/build-singlefile.js"
   },
   "build": {
@@ -39,7 +40,7 @@
       ]
     },
     "portable": {
-      "artifactName": "TOS_v${version}.exe"
+      "artifactName": "SwordMastersAscent_v${version}_portable.exe"
     }
   },
   "dependencies": {

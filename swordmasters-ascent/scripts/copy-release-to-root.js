@@ -2,13 +2,14 @@
 // Copy the latest portable exe to the outer Codex project folder for easy access.
 const fs = require('fs');
 const path = require('path');
+const { getPortableExeName, isManagedPortableArtifact } = require('./release-names');
 
 const projectRoot = path.resolve(__dirname, '..');
 const outerRoot = path.resolve(projectRoot, '..');
 const releaseDir = path.join(outerRoot, 'release');
 const pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8'));
 
-const exeName = `TOS_v${pkg.version}.exe`;
+const exeName = getPortableExeName(pkg.version);
 const source = path.join(releaseDir, exeName);
 const target = path.join(outerRoot, exeName);
 
@@ -17,7 +18,7 @@ if (!fs.existsSync(source)) {
 }
 
 for (const file of fs.readdirSync(outerRoot)) {
-  if (/^(TOS_v.*\.exe|SwordMastersAscent_v.*_portable\.exe)$/i.test(file)) {
+  if (isManagedPortableArtifact(file)) {
     fs.rmSync(path.join(outerRoot, file), { force: true });
   }
 }
