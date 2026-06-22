@@ -188,10 +188,11 @@
 
 #### 발견된 이슈
 
-**P1 (우선순위 높음)**: onStatRollComplete에서 행 초기화 누락
-- **증상**: stat_roll 단계에서 행이 초기값으로 리셋되지 않음
-- **수정**: playerRow/enemyRow를 COMBAT_ROW_DEFAULT로 초기화
-- **영향**: 행 이동 시스템 정상화
+**P1 (high priority) - resolved/verified**: onStatRollComplete row reset
+- **Previous symptom**: row state did not reset to the default after stat_roll.
+- **Current state**: `onStatRollComplete` resets `playerRow/enemyRow` to `COMBAT_ROW_DEFAULT`, and calls `spawnIntent` with default rows.
+- **Verified**: 2026-06-22
+- **Impact**: row movement system starts each new run from the normal center row.
 
 **P2 (우선순위 중간)**:
 - 레거시 주석: "distance-only API" 하단 주석 정확성 확인
