@@ -194,9 +194,10 @@
 - **Verified**: 2026-06-22
 - **Impact**: row movement system starts each new run from the normal center row.
 
-**P2 (우선순위 중간)**:
-- 레거시 주석: "distance-only API" 하단 주석 정확성 확인
-- 버전 푸터: 최신 버전 확인
+**P2 (medium priority) - resolved/verified**:
+- **Legacy distance API comment**: `calcNewDistance` is intentionally retained as a distance-only wrapper around `calcNewPositions`; the comment is accurate.
+- **Version footer**: planning docs and HTML footers are synchronized to the current package/release version.
+- **Verified**: 2026-06-22
 
 #### TypeScript 검사
 - 모든 타입 체크 통과 ✅
