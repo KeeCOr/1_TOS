@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SwordMastersAscent ?낅뜲?댄듃 ?댁뿭??/title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;line-height:1.65;max-width:980px;margin:0 auto;padding:40px 24px;color:#20242a;background:#fafafa}
+    h1{font-size:34px;margin:0 0 20px} h2{font-size:24px;margin-top:34px;border-bottom:1px solid #ddd;padding-bottom:6px} h3{font-size:18px;margin-top:24px}
+    p,li,pre{font-size:15px} li{margin:5px 0} pre{white-space:pre-wrap;background:#fff;border:1px solid #ddd;border-radius:8px;padding:8px 10px}
+  </style>
+</head>
+<body>
+  <h2>v1.5.68 - Narrow Combat Miss/Dodge Feedback</h2>
+  <ul><li>전투 결과 피드백에서 공격 빗나감, 사거리 미스, 회피 성공, 피해 반응을 서로 다른 cue로 분리했다.</li><li><code>combatFeedback.cjs</code>와 <code>combat-feedback.test.cjs</code>를 추가해 한 액션 안에서 읽히는 결과 문구를 회귀 테스트로 고정했다.</li><li>검증: <code>npm test</code> 10개 통과, <code>npm run build</code> 통과, <code>npm run dist</code> 통과.</li><li>산출물: <code>SwordMastersAscent_v1.5.68_portable.exe</code>를 루트, <code>release/</code>, Google Drive 실행파일 폴더에 배치했다.</li></ul><h1>SwordMastersAscent ?낅뜲?댄듃 ?댁뿭??/h1>
+
+<h2>2026-06-30 臾몄꽌 援ъ“ ?뺣━</h2>
+<li>湲고쉷?쒖? ?낅뜲?댄듃 ?댁뿭?쒕? 遺꾨━?덈떎.</li>
+<li>湲고쉷?쒕뒗 寃뚯엫 ?뚭컻, ?듭떖 猷⑦봽, MVP 媛?? KPI, UX ?먯튃 以묒떖?쇰줈 ?ъ옉?깊뻽??</li>
+<li>蹂寃??대젰, 援ы쁽 濡쒓렇, 寃利?湲곕줉? ??臾몄꽌?먯꽌 愿由ы븳??</li>
+
+<h2>湲곗〈 臾몄꽌?먯꽌 遺꾨━???대젰 ?꾨낫</h2>
+<li>.badge-updated { background: rgba(212,160,23,0.2); color: var(--accent); }</li>
+<li>湲고쉷??v1.5.68</li>
+<li>理쒖쥌 ?섏젙: 2026-06-30 &amp;nbsp;|&amp;nbsp; 踰꾩쟾: 1.5.68 &amp;nbsp;|&amp;nbsp; ?ㅼ젣 援ы쁽 肄붾뱶 湲곗??쇰줈 ?숆린??/li>
+<li>?뚮젅?댁뼱 ?쒖옉 ?꾩튂: 1 &amp;nbsp;|&amp;nbsp; ???쒖옉 ?꾩튂: 4 (嫄곕━ 3). ?됱? ?대룞 ?쒕툕?≪뀡?쇰줈留?蹂寃? 怨듦꺽? 媛숈? ?됱뿉留?紐낆쨷. 留덈쾿쨌?꾩씠???ъ쿃)? ??臾닿?.</li>
+<li>3.2 硫붿씤 ?≪뀡 (5媛吏) v1.5.68 ?섏튂 媛깆떊</li>
+<li>3.3 ?쒕툕?≪뀡 (22媛? v1.5.68 媛깆떊</li>
+<li>諛⑹뼱 ?쒕툕 (3媛? 紐낆묶 蹂寃?/li>
+<li>3.5 二쇱궗??泥닿퀎 (3?④퀎) v1.5.68 ?꾨㈃ 媛쒗렪</li>
+<li>3.6 諛⑹뼱 ?쒖뒪???몃? v1.5.68 3?④퀎 遺꾧린</li>
+<li>3.8 ?ㅽ뀒誘몃꼫 ?쒖뒪??v1.5.68 媛깆떊</li>
+<li>7.1 留덈쾿 ?쒖뒪??v1.5.68 荑⑤떎??湲곗? 蹂寃?/li>
+<li>?쒗넗由ъ뼹 ?꾨즺swordmasters-ascent-tutorial-done?꾨즺 ?щ? (boolean)</li>
+<li>?ㅽ뀒誘몃꼫 蹂?붾웾 v1.5.68</li>
+<li>localStorage 湲곕컲 ??μ쑝濡??쒕쾭 ?놁씠 3?щ’ ?몄씠釉?援ы쁽 ???댁쁺 鍮꾩슜 ?놁쓬</li>
+<li>??踰꾩쟾???곕え ??븷?ㅽ? 異쒖떆 ????踰꾩쟾?쇰줈 ?좎? ? ?뺣낫. ??踰꾩쟾???ъ떎??臾대즺 ?곕え ??븷??寃명븿</li>
+<li>??湲고쉷?쒕뒗 ?ㅼ젣 援ы쁽 肄붾뱶(src/lib/gameData.ts, src/components/SwordmastersAscent.tsx)瑜?湲곗??쇰줈 ?숆린?붾맗?덈떎. 踰꾩쟾: 1.5.68</li>
+<li>?먮룞 媛깆떊: 2026-06-04. 怨듭쑀 ??臾몄꽌? ?④퍡 ?꾨옒 ?대?吏 寃쎈줈媛 ?ы븿?섏뼱???⑸땲??</li>
+<li>&gt; 理쒖쥌 ?섏젙: 2026-06-30 | 踰꾩쟾: 1.5.68</li>
+
+<h2>?묒꽦 洹쒖튃</h2>
+<li>湲곕뒫 異붽?, 諛몃윴??蹂寃? UI/UX ?섏젙, 由ъ냼??援먯껜, 鍮뚮뱶/諛고룷 蹂寃쎌? ?좎쭨? 踰꾩쟾???④퍡 湲곕줉?쒕떎.</li>
+<li>湲고쉷?쒖뿉??理쒖떊 ?뚭컻? ?꾩옱 ?ㅺ퀎 ?섎룄留??④린怨? 怨쇨굅 ?묒뾽 濡쒓렇????臾몄꽌濡??대룞?쒕떎.</li>
+<li>MD? HTML? ??긽 ?④퍡 媛깆떊?쒕떎.</li>
+
+<section>
+  <h2>v1.5.68 Combat Feedback Refresh (2026-06-29)</h2>
+  <ul>
+    <li>Added distinct combat feedback cues for attack windup, hit result, dodge success, and player damage response.</li>
+    <li><code>src/lib/combatFeedback.cjs</code> owns the cue labels/details and is covered by Node tests.</li>
+    <li><code>DicePanel</code> renders compact feedback chips above the dice contest rows without changing the core combat resolver.</li>
+    <li>Validation: <code>npm test</code> passed 7 tests; <code>npm run build</code> passed; <code>npm run dist</code> produced <code>SwordMastersAscent_v1.5.68_portable.exe</code>.</li>
+  </ul>
+</section>
+
+<section id="sword-schools">
+  <h2>v1.5.68 검술 유파와 계승 강화</h2>
+  <ul>
+    <li>새 게임 시 5개 검술 유파(균형검, 암영검, 비전검, 주술검, 철벽검) 중 하나를 선택한다.</li>
+    <li>유파는 시작 능력치, 마법, 투척 아이템, HP/MP 구성을 바꿔 빌드 차이를 즉시 만든다.</li>
+    <li>사망 시 레거시 캐릭터에 유파 정보가 남아 다음 회차에 전인의 흔적으로 연결된다.</li>
+  </ul>
+</section>
+
+</body>
+</html>
+

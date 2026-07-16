@@ -1,3 +1,5 @@
+import swordSchools from './swordSchools.json';
+
 // ============================================================
 // GAME DATA
 // ============================================================
@@ -18,7 +20,7 @@ export function getActionRange(action: ActionType, weaponRange: number): number 
   return 0; // 이동/방어는 사거리 개념 없음
 }
 export type GamePhase    = 'start' | 'tutorial' | 'naming' | 'stat_roll' | 'battle' | 'reward' | 'event' | 'gameover';
-export type TitleId      = 'weapon_breaker' | 'tower_climber' | 'boss_slayer' | 'magic_adept' | 'survivor' | 'novice' | `combat_${string}`;
+export type TitleId      = 'weapon_breaker' | 'tower_climber' | 'boss_slayer' | 'magic_adept' | 'survivor' | 'novice' | `combat_${string}` | `school_${string}`;
 export type MatchQuality = 'perfect' | 'partial' | 'miss';
 export type CombatStep   = 'select_main' | 'select_sub' | 'rolling' | 'result';
 export type DiceMode     = 'highest' | 'sum';   // kept for legacy/internal use
@@ -397,6 +399,8 @@ export interface EnemyAbility {
 
 export interface Character {
   id: string; name: string; level: number;
+  swordSchool?: StartBuild;
+  swordSchoolName?: string;
   life?: number; maxLife?: number;  // deprecated — kept for save compatibility only
   condition?: Condition;
   stats: {
@@ -1637,13 +1641,30 @@ export function generateEnemy(floor: number, legacyCharacters: Character[], floo
 
 export type StartBuild = 'default' | 'assassin' | 'magic_start' | 'arcane' | 'tank';
 
+export interface SwordSchoolDefinition {
+  id: StartBuild;
+  name: string;
+  description: string;
+  bonusSummary: string;
+  legacyName: string;
+}
+
+export const SWORD_SCHOOLS = swordSchools as SwordSchoolDefinition[];
+
+export function getSwordSchool(id: StartBuild): SwordSchoolDefinition {
+  return SWORD_SCHOOLS.find(s => s.id === id) ?? SWORD_SCHOOLS[0];
+}
+
 export function createPlayer(highScore: number, name: string = '검사', build: StartBuild = 'default'): Character {
+  const school = getSwordSchool(build);
   const bonus = Math.floor(highScore * 0.1);
   const rand = (base: number, variance: number) =>
     base + bonus + Math.floor(Math.random() * variance * 2) - variance;
   const startSpell = MAGIC_SPELL_POOL[Math.floor(Math.random() * MAGIC_SPELL_POOL.length)];
   const base: Character = {
     id: 'player', name, level: 1,
+    swordSchool: build,
+    swordSchoolName: school.name,
     condition: 'normal',
     stats: {
       strength:  Math.max(10, rand(20, 5)),

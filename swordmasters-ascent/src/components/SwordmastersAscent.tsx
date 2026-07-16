@@ -19,7 +19,9 @@ import {
   getActionRange,
   UnlockKey,
   Injury, getBodyInjuryStaminaDrain,
+  StartBuild, SWORD_SCHOOLS, getSwordSchool,
 } from '@/lib/gameData';
+import { getCombatFeedbackCues } from '@/lib/combatFeedback.cjs';
 
 /** 활성 상태효과를 캐릭터에 틱 처리: stamina_drain 즉시 적용, duration 1 감소, duration=0 제거 */
 function tickStatusEffects(char: Character): Character {
@@ -396,7 +398,7 @@ function BattleGrid({
                 <CharImage src="/chars/player.png" fallback="🛡️" size={36}
                   glow={pFlash ? 'rgba(239,68,68,0.9)' : 'rgba(96,165,250,0.65)'} flash={pFlash} />
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 max-w-full">
                 <div className="text-[10px] font-bold text-blue-300 truncate">{player.name}</div>
                 <div className="text-[8px] text-gray-600">Lv.{player.level}</div>
               </div>
@@ -773,10 +775,11 @@ const STAT_LABELS: Record<string, string> = {
   strength: '💪 힘', agility: '👣 민첩', armor: '🛡️ 방어율', critChance: '🗡️ 치명타',
 };
 
-function StatRollScreen({ onComplete, highScore, playerName }: {
-  onComplete: (p: Character) => void; highScore: number; playerName: string;
+function StatRollScreen({ onComplete, highScore, playerName, startBuild }: {
+  onComplete: (p: Character) => void; highScore: number; playerName: string; startBuild: StartBuild;
 }) {
-  const playerRef = useRef(createPlayer(highScore, playerName));
+  const school = getSwordSchool(startBuild);
+  const playerRef = useRef(createPlayer(highScore, playerName, startBuild));
   const finalRef  = useRef(playerRef.current.stats);
 
   const [display, setDisplay] = useState({
@@ -928,7 +931,7 @@ function ResourceBar({
   compact?: boolean;
 }) {
   return (
-    <div className="min-w-0">
+    <div className="min-w-0 max-w-full">
       <div className="flex justify-between text-[9px] leading-none mb-1">
         <span className="font-black" style={{ color }}>{label} {value}</span>
         <span className="text-gray-600 tabular-nums">{max}</span>
@@ -957,7 +960,7 @@ function StatusPill({
     magic: 'border-purple-700/60 text-purple-300 bg-purple-950/45',
   }[tone];
   return (
-    <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-[8px] font-black leading-none border ${toneClass}`}>
+    <span className={`inline-flex max-w-full min-w-0 items-center rounded border px-1.5 py-0.5 text-center text-[8px] font-black leading-tight whitespace-normal break-words ${toneClass}`}>
       {children}
     </span>
   );
@@ -1017,9 +1020,9 @@ function BattleTopBar({
   return (
     <div className="pointer-events-none absolute top-0 left-0 right-0 z-30 grid grid-cols-[270px_1fr_270px] items-start gap-3 px-3 pt-3">
       <div className="pointer-events-auto rounded-lg p-2 min-w-0" style={HUD_PANEL_STYLE}>
-        <div className="flex items-center gap-2 mb-2 min-w-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 mb-2">
           <StatusPill tone="warn">{floor}F</StatusPill>
-          <span className="text-[11px] text-gray-300 truncate">Lv.<b>{player.level}</b> {player.name}</span>
+          <span className="min-w-0 max-w-full text-[11px] text-gray-300 leading-tight whitespace-normal break-words">Lv.<b>{player.level}</b> {player.name}</span>
           {player.condition && <StatusPill>{CONDITION_LABELS[player.condition]}</StatusPill>}
         </div>
         <div className="space-y-1.5">
@@ -1037,19 +1040,19 @@ function BattleTopBar({
       </div>
 
       <div className="pointer-events-auto justify-self-center rounded-lg px-3 py-2 flex max-w-[360px] flex-col items-center justify-center min-w-0" style={HUD_PANEL_STYLE}>
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex min-w-0 flex-wrap items-center justify-center gap-2 mb-1">
           <span className={`text-lg font-black ${distanceColor}`}>{distanceLabel}</span>
           <StatusPill tone={rowSame ? 'warn' : 'neutral'}>{rowSame ? '⚔ 같은행' : '↕ 분리'}</StatusPill>
         </div>
-        <div className="text-[11px] text-gray-400 max-w-[520px] truncate">
+        <div className="max-w-full text-center text-[11px] leading-tight text-gray-400 whitespace-normal break-words">
           {intentHint}
         </div>
       </div>
 
       <div className="pointer-events-auto rounded-lg p-2 min-w-0" style={HUD_PANEL_STYLE}>
-        <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
-          <div className="flex items-center gap-1.5 min-w-0">
-            <span className="text-[11px] text-red-300 font-black truncate">{enemy.name}</span>
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 mb-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+            <span className="min-w-0 max-w-full text-[11px] font-black leading-tight text-red-300 whitespace-normal break-words">{enemy.name}</span>
             {enemy.isBoss && <StatusPill tone="warn">BOSS</StatusPill>}
             {enemy.condition && <StatusPill>{CONDITION_LABELS[enemy.condition]}</StatusPill>}
           </div>
@@ -1118,9 +1121,9 @@ function BattleCommandPanel({
                 style={{ background: disabled ? 'rgba(20,20,30,0.7)' : outOfRange ? 'rgba(90,45,10,0.75)' : bg,
                   borderColor: disabled ? 'rgba(60,60,80,0.5)' : outOfRange ? 'rgba(160,80,20,0.7)' : border }}>
                 <ActionGlyph icon={icon} />
-                <div className="min-w-0">
-                  <div className={`truncate text-sm font-black leading-tight ${disabled ? 'text-gray-600' : outOfRange ? 'text-orange-300' : 'text-white'}`}>{action}</div>
-                  <div className={`truncate text-[9px] leading-none ${disabled ? 'text-gray-700' : outOfRange ? 'text-orange-500' : 'text-gray-400'}`}>
+                <div className="min-w-0 max-w-full">
+                  <div className={`max-w-full text-sm font-black leading-tight whitespace-normal break-words ${disabled ? 'text-gray-600' : outOfRange ? 'text-orange-300' : 'text-white'}`}>{action}</div>
+                  <div className={`max-w-full text-[9px] leading-tight whitespace-normal break-words ${disabled ? 'text-gray-700' : outOfRange ? 'text-orange-500' : 'text-gray-400'}`}>
                     {action === '공격' ? (outOfRange ? `⚠ 사거리 ${aRange}` : `사거리 ${aRange}`) :
                      action === '마법 사용' ? (disabled ? (magicCooldown > 0 ? `대기 ${magicCooldown}턴` : '사용 불가') : `사거리 ${aRange}`) :
                      action === '방어' ? '피해 감소' : '위치 이동'}
@@ -1137,11 +1140,11 @@ function BattleCommandPanel({
         </div>
         {player.inventory.length > 0 && (
           <button onClick={() => onMainSelect('아이템 사용')}
-            className="w-full flex min-w-0 items-center gap-2 py-1.5 px-3 rounded-lg border border-yellow-800/50 hover:brightness-125 active:scale-95 cursor-pointer"
+            className="flex w-full min-w-0 max-w-full flex-wrap items-center gap-2 rounded-lg border border-yellow-800/50 px-3 py-1.5 hover:brightness-125 active:scale-95 cursor-pointer"
             style={{ background: 'rgba(60,40,5,0.75)' }}>
-            <span className="text-lg">🎒</span>
+            <span className="shrink-0 text-lg">🎒</span>
             <span className="text-xs font-bold text-yellow-300">아이템 사용</span>
-            <span className="text-[9px] text-yellow-600 ml-auto truncate">{player.inventory.map(it=>it.name).join(' · ')}</span>
+            <span className="ml-auto min-w-0 max-w-full text-right text-[9px] leading-tight text-yellow-600 whitespace-normal break-words">{player.inventory.map(it=>it.name).join(' · ')}</span>
           </button>
         )}
       </div>
@@ -1151,8 +1154,8 @@ function BattleCommandPanel({
   if (combatStep === 'select_sub' && playerMain) {
     return (
       <div className="flex max-h-[170px] min-h-0 min-w-0 flex-col">
-        <div className="mb-1.5 flex shrink-0 items-center gap-2">
-          <span className="truncate text-[11px] text-gray-400 font-bold">{playerMain}</span>
+        <div className="mb-1.5 flex min-w-0 shrink-0 flex-wrap items-center gap-2">
+          <span className="min-w-0 max-w-full text-[11px] font-bold leading-tight text-gray-400 whitespace-normal break-words">{playerMain}</span>
           <span className="text-gray-700 text-[10px]">›</span>
           <span className="text-[10px] text-gray-500">방식 선택</span>
           <button onClick={onCancelSub}
@@ -1180,14 +1183,14 @@ function BattleCommandPanel({
                 isMiss    ? 'bg-red-950/50 border-red-800/50 text-red-300 hover:brightness-125' :
                             'bg-black/60 border-gray-700/60 text-gray-200 hover:bg-black/80 hover:border-gray-500'
               }`}>
-              <div className="flex min-w-0 flex-col items-start text-left">
-                <span className="max-w-full truncate text-sm font-bold leading-tight">
+              <div className="flex min-w-0 max-w-full flex-col items-start text-left">
+                <span className="max-w-full text-sm font-bold leading-tight whitespace-normal break-words">
                   {isPerfect && <span className="text-yellow-400 mr-1">★</span>}
                   {isMiss    && <span className="text-red-500 mr-1">✗</span>}
                   {moveMeta && <span className="mr-1.5 text-base leading-none">{moveMeta.icon}</span>}
                   {sub}
                 </span>
-                <span className={`max-w-full truncate text-[9px] leading-tight mt-0.5 ${
+                <span className={`mt-0.5 max-w-full text-[9px] leading-tight whitespace-normal break-words ${
                   isPerfect ? 'text-yellow-600' : isMiss ? 'text-red-700' : 'text-gray-600'
                 }`}>
                   {isPerfect ? `카운터 — 힘싸움 +1주사위` :
@@ -1195,7 +1198,7 @@ function BattleCommandPanel({
                                moveMeta?.desc ?? SUB_ACTION_INFO[sub]?.desc ?? ''}
                 </span>
                 {moveMeta && (
-                  <span className={`mt-1 rounded border px-1.5 py-0.5 text-[8px] font-black leading-none ${moveMeta.tone}`}>
+                  <span className={`mt-1 max-w-full rounded border px-1.5 py-0.5 text-[8px] font-black leading-tight whitespace-normal break-words ${moveMeta.tone}`}>
                     뷰 기준 {moveMeta.label}
                   </span>
                 )}
@@ -1450,18 +1453,18 @@ function BattleTacticalConsole({
         />
       </div>
       <div className="pointer-events-auto justify-self-center rounded-lg p-2 min-w-0 w-full max-w-[420px]" style={HUD_PANEL_STYLE}>
-        <div className="flex h-full min-w-0 flex-col justify-end gap-2">
+        <div className="flex h-full min-w-0 max-w-full flex-col justify-end gap-2">
           <div className="min-w-0 rounded border border-red-900/45 bg-red-950/30 px-2.5 py-1.5">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="text-base leading-none">{ACTION_ICONS[enemyMainAction] ?? '⚔️'}</span>
-              <div className="min-w-0">
-                <div className="truncate text-[9px] font-black uppercase tracking-wide text-red-500">
+            <div className="flex min-w-0 items-start gap-2">
+              <span className="shrink-0 text-base leading-none">{ACTION_ICONS[enemyMainAction] ?? '⚔️'}</span>
+              <div className="min-w-0 max-w-full">
+                <div className="max-w-full text-[9px] font-black uppercase leading-tight tracking-wide text-red-500 whitespace-normal break-words">
                   상대 예상 행동
                 </div>
-                <div className="truncate text-[11px] font-black text-red-100">
+                <div className="max-w-full text-[11px] font-black leading-tight text-red-100 whitespace-normal break-words">
                   {enemyMainAction} / {formatSubActionForView(likelySub)}
                 </div>
-                <div className="truncate text-[9px] text-red-400/80">
+                <div className="max-w-full text-[9px] leading-tight text-red-400/80 whitespace-normal break-words">
                   힌트: {likelyInfo?.hint ?? likelyInfo?.desc ?? '상대의 움직임을 읽는 중'}
                 </div>
               </div>
@@ -1622,6 +1625,7 @@ function DicePanel({ result, rolling, playerName, enemyName }: {
   const isPerfect  = result.quality === 'perfect';
   const isMiss     = result.quality === 'miss';
   const isCrit     = result.isCritical;
+  const combatFeedbackCues = getCombatFeedbackCues(result, rolling);
 
   return (
     <div className="space-y-2">
@@ -1652,6 +1656,16 @@ function DicePanel({ result, rolling, playerName, enemyName }: {
       {/* 마법 성공 판정 */}
       {result.magicRoll && (
         <MagicRollRow magicRoll={result.magicRoll} rolling={rolling} />
+      )}
+      {combatFeedbackCues.length > 0 && (
+        <div data-combat-feedback-cues className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
+          {combatFeedbackCues.map((cue: { id: string; className: string; label: string; detail: string; priority?: string; screenAnchor?: string; effect?: string; scale?: number }) => (
+            <div key={cue.id} data-priority={cue.priority} data-effect={cue.effect} className={`rounded-md border px-2 py-1 text-left ${cue.className} ${cue.screenAnchor === 'center' ? 'shadow-[0_0_18px_rgba(250,204,21,0.22)]' : ''}`}>
+              <div className="text-[9px] font-black uppercase tracking-[0.12em] opacity-80">{cue.label}</div>
+              <div className="max-w-full text-[10px] leading-tight whitespace-normal break-words">{cue.detail}</div>
+            </div>
+          ))}
+        </div>
       )}
       {!rolling && (
         <div className="flex justify-center gap-6 text-sm pb-1">
@@ -2296,7 +2310,7 @@ function BattleLog({ logs, compact }: { logs: string[]; compact?: boolean }) {
     return (
       <div ref={ref} className="overflow-hidden rounded p-1 space-y-0.5" style={{ background: 'rgba(0,0,0,0.55)', border: '1px solid rgba(255,255,255,0.06)' }}>
         {recent.map((l, i) => (
-          <p key={i} className={`text-[10px] leading-tight ${i === recent.length - 1 ? 'text-gray-200' : 'text-gray-600'}`}>{l}</p>
+          <p key={i} className={`max-w-full text-[10px] leading-tight whitespace-normal break-words ${i === recent.length - 1 ? 'text-gray-200' : 'text-gray-600'}`}>{l}</p>
         ))}
       </div>
     );
@@ -2304,7 +2318,7 @@ function BattleLog({ logs, compact }: { logs: string[]; compact?: boolean }) {
   return (
     <div ref={ref} className="h-20 overflow-y-auto bg-gray-950 border border-gray-800 rounded p-2 text-xs space-y-0.5">
       {logs.map((l, i) => (
-        <p key={i} className={i === logs.length - 1 ? 'text-white' : 'text-gray-500'}>{l}</p>
+        <p key={i} className={`max-w-full whitespace-normal break-words ${i === logs.length - 1 ? 'text-white' : 'text-gray-500'}`}>{l}</p>
       ))}
     </div>
   );
@@ -2395,6 +2409,7 @@ function NameInputScreen({ onComplete }: { onComplete: (name: string) => void })
 export default function SwordmastersAscent() {
   const [phase, setPhase]       = useState<GamePhase>('start');
   const [pendingPlayerName, setPendingPlayerName] = useState('검사');
+  const [pendingStartBuild, setPendingStartBuild] = useState<StartBuild>('default');
   const [floor, setFloor]       = useState(1);
   const [highScore, setHighScore] = useState(() => loadHighScore());
   const [player, setPlayer]     = useState<Character | null>(null);
@@ -2531,6 +2546,7 @@ export default function SwordmastersAscent() {
   const handleNewGame = useCallback((slotIndex: number) => {
     setActiveSaveSlot(slotIndex);
     setPlayer(null); setEnemy(null);
+    setPendingStartBuild('default');
     setFloor(1); setPlayerPos(1); setEnemyPos(4); setMagicCooldown(0); setPlayerRow(COMBAT_ROW_DEFAULT); setEnemyRow(COMBAT_ROW_DEFAULT);
     const tutorialDone = typeof window !== 'undefined' && localStorage.getItem(TUTORIAL_KEY) === 'true';
     setPhase(tutorialDone ? 'naming' : 'tutorial');
@@ -2984,7 +3000,7 @@ export default function SwordmastersAscent() {
   if (phase === 'stat_roll') return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
-        <StatRollScreen highScore={highScore} onComplete={onStatRollComplete} playerName={pendingPlayerName} />
+        <StatRollScreen highScore={highScore} onComplete={onStatRollComplete} playerName={pendingPlayerName} startBuild={pendingStartBuild} />
       </div>
     </div>
   );
