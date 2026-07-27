@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import {
@@ -1454,6 +1454,23 @@ function BattleTacticalConsole({
       </div>
       <div className="pointer-events-auto justify-self-center rounded-lg p-2 min-w-0 w-full max-w-[420px]" style={HUD_PANEL_STYLE}>
         <div className="flex h-full min-w-0 max-w-full flex-col justify-end gap-2">
+          <div className="grid grid-cols-3 gap-1.5">
+            <div className="rounded-md border border-orange-500/55 bg-orange-950/45 px-2 py-1.5 shadow-[0_0_18px_rgba(249,115,22,0.12)]">
+              <div className="text-[9px] font-black uppercase tracking-wide text-orange-300">Hit</div>
+              <div className="text-base font-black leading-none text-orange-100">큰 숫자</div>
+              <div className="mt-0.5 text-[9px] leading-tight text-orange-200/75">slash sfx · 피해량</div>
+            </div>
+            <div className="rounded-md border border-sky-500/55 bg-sky-950/45 px-2 py-1.5 shadow-[0_0_18px_rgba(56,189,248,0.12)]">
+              <div className="text-[9px] font-black uppercase tracking-wide text-sky-300">Evade</div>
+              <div className="text-sm font-black italic leading-none text-sky-100">회피!</div>
+              <div className="mt-0.5 text-[9px] leading-tight text-sky-200/75">whoosh sfx · 작은 글자</div>
+            </div>
+            <div className="rounded-md border border-emerald-500/55 bg-emerald-950/45 px-2 py-1.5 shadow-[0_0_18px_rgba(16,185,129,0.12)]">
+              <div className="text-[9px] font-black uppercase tracking-wide text-emerald-300">Grow</div>
+              <div className="text-sm font-black leading-none text-emerald-100">보상 선택</div>
+              <div className="mt-0.5 text-[9px] leading-tight text-emerald-200/75">chime sfx · 성장</div>
+            </div>
+          </div>
           <div className="min-w-0 rounded border border-red-900/45 bg-red-950/30 px-2.5 py-1.5">
             <div className="flex min-w-0 items-start gap-2">
               <span className="shrink-0 text-base leading-none">{ACTION_ICONS[enemyMainAction] ?? '⚔️'}</span>
@@ -1659,9 +1676,10 @@ function DicePanel({ result, rolling, playerName, enemyName }: {
       )}
       {combatFeedbackCues.length > 0 && (
         <div data-combat-feedback-cues className="grid grid-cols-1 gap-1.5 sm:grid-cols-3">
-          {combatFeedbackCues.map((cue: { id: string; className: string; label: string; detail: string; priority?: string; screenAnchor?: string; effect?: string; scale?: number }) => (
+          {combatFeedbackCues.map((cue: { id: string; className: string; label: string; detail: string; priority?: string; screenAnchor?: string; effect?: string; scale?: number; soundCue?: string }) => (
             <div key={cue.id} data-priority={cue.priority} data-effect={cue.effect} className={`rounded-md border px-2 py-1 text-left ${cue.className} ${cue.screenAnchor === 'center' ? 'shadow-[0_0_18px_rgba(250,204,21,0.22)]' : ''}`}>
               <div className="text-[9px] font-black uppercase tracking-[0.12em] opacity-80">{cue.label}</div>
+              {cue.soundCue && <div className="text-[8px] font-bold uppercase tracking-wide opacity-70">SFX · {cue.soundCue}</div>}
               <div className="max-w-full text-[10px] leading-tight whitespace-normal break-words">{cue.detail}</div>
             </div>
           ))}
@@ -3420,3 +3438,5 @@ export default function SwordmastersAscent() {
     </BattleViewport>
   );
 }
+
+

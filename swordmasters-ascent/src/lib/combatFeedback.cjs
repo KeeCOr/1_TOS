@@ -9,14 +9,14 @@
 });
 
 const VISUAL_PROFILES = Object.freeze({
-  windup: { priority: 'center-read', screenAnchor: 'center', effect: 'stance-pulse', durationMs: 520, scale: 1 },
-  hit: { priority: 'center-impact', screenAnchor: 'center', effect: 'slash-flash', durationMs: 640, scale: 1.14 },
-  critical: { priority: 'center-impact', screenAnchor: 'center', effect: 'slash-flash', durationMs: 640, scale: 1.34 },
-  dodge: { priority: 'center-evade', screenAnchor: 'center', effect: 'afterimage-step', durationMs: 560, scale: 1.08 },
-  miss: { priority: 'center-miss', screenAnchor: 'center', effect: 'empty-row-spark', durationMs: 520, scale: 0.96 },
-  damage: { priority: 'log-response', screenAnchor: 'log', effect: 'red-chip', durationMs: 480, scale: 1 },
-  guard: { priority: 'log-response', screenAnchor: 'log', effect: 'guard-pulse', durationMs: 460, scale: 0.96 },
-  growth: { priority: 'center-growth', screenAnchor: 'center', effect: 'aura-rise', durationMs: 760, scale: 1.22 },
+  windup: { priority: 'center-read', screenAnchor: 'center', effect: 'stance-pulse', soundCue: 'stance', durationMs: 520, scale: 1 },
+  hit: { priority: 'center-impact', screenAnchor: 'center', effect: 'slash-flash', soundCue: 'slash', durationMs: 640, scale: 1.14 },
+  critical: { priority: 'center-impact', screenAnchor: 'center', effect: 'slash-flash', soundCue: 'heavy-slash', durationMs: 640, scale: 1.34 },
+  dodge: { priority: 'center-evade', screenAnchor: 'center', effect: 'afterimage-step', soundCue: 'whoosh', durationMs: 560, scale: 1.08 },
+  miss: { priority: 'center-miss', screenAnchor: 'center', effect: 'empty-row-spark', soundCue: 'air-cut', durationMs: 520, scale: 0.96 },
+  damage: { priority: 'log-response', screenAnchor: 'log', effect: 'red-chip', soundCue: 'hit-low', durationMs: 480, scale: 1 },
+  guard: { priority: 'log-response', screenAnchor: 'log', effect: 'guard-pulse', soundCue: 'guard', durationMs: 460, scale: 0.96 },
+  growth: { priority: 'center-growth', screenAnchor: 'center', effect: 'aura-rise', soundCue: 'chime', durationMs: 760, scale: 1.22 },
 });
 
 function cue(id, label, detail, tone, visual = tone) {
@@ -98,3 +98,4 @@ function getCombatFeedbackCues(result, rolling = false) {
 }
 
 module.exports = { getCombatFeedbackCues, TONE_CLASS, VISUAL_PROFILES };
+

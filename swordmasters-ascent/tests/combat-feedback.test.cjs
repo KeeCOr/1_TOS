@@ -105,3 +105,15 @@ test('combat feedback orders center impact before log-style damage response', ()
   assert.equal(cues[0].priority, 'center-impact');
   assert.equal(cues[1].priority, 'log-response');
 });
+test('combat feedback assigns distinct sound cues to hit, dodge, and growth', () => {
+  const hitCue = getCombatFeedbackCues({ quality: 'hit', damageDealt: 12, damageTaken: 0 })
+    .find(cue => cue.id === 'hit-result');
+  const dodgeCue = getCombatFeedbackCues({ quality: 'miss', damageDealt: 0, damageTaken: 0, enemyRowMiss: true })
+    .find(cue => cue.id === 'dodge-success');
+  const growthCue = getCombatFeedbackCues({ quality: 'growth', growth: { stat: 'Sword Aura', amount: 1 } })
+    .find(cue => cue.id === 'growth-result');
+
+  assert.equal(hitCue.soundCue, 'slash');
+  assert.equal(dodgeCue.soundCue, 'whoosh');
+  assert.equal(growthCue.soundCue, 'chime');
+});
