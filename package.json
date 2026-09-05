@@ -10,7 +10,9 @@
     "lint": "eslint",
     "electron": "electron .",
     "dist": "node scripts/bump-version.js && node scripts/clean-release.js && next build && electron-builder --win portable --x64",
-    "html": "next build && node scripts/build-singlefile.js"
+    "html": "next build && node scripts/build-singlefile.js",
+    "build:steam": "next build && electron-builder --win portable --x64 --config.win.signAndEditExecutable=false",
+    "dist:steam": "node scripts/bump-version.js && next build && electron-builder --win portable --x64 --config.win.signAndEditExecutable=false"
   },
   "build": {
     "appId": "com.tos.swordmasters",
@@ -22,7 +24,9 @@
     "files": [
       "out/**/*",
       "electron/main.js",
-      "package.json"
+      "electron/preload.js",
+      "package.json",
+      "steam_appid.txt"
     ],
     "win": {
       "forceCodeSigning": false,
@@ -40,6 +44,9 @@
     "portable": {
       "artifactName": "TOS_v${version}.exe"
     }
+  },
+  "optionalDependencies": {
+    "steamworks.js": "^0.3.1"
   },
   "dependencies": {
     "next": "16.2.1",
