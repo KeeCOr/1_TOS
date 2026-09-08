@@ -3213,80 +3213,81 @@ export default function SwordmastersAscent() {
         </div>
       )}
 
-      {/* ══════ 바닥 원근 그리드 ══════ */}
+      {/* ══════ 바닥 원근 그리드 (이미지젠 래스터 레이어) ══════ */}
       {(() => {
         const sameCell = playerPos === enemyPos && playerRow === enemyRow;
-        // 셀 하이라이트용 사각형 꼭짓점
-        const cellPts = (p: number, r: number) => {
-          const td0 = (p-1)/5, td1 = p/5;
-          const tl0 = (r-1)/3, tl1 = r/3;
-          const a = gPt(td0,tl0), b = gPt(td0,tl1);
-          const c = gPt(td1,tl1), d = gPt(td1,tl0);
-          return `${a.x},${a.y} ${b.x},${b.y} ${c.x},${c.y} ${d.x},${d.y}`;
+        const cellBox = (p: number, r: number) => {
+          const td0 = (p - 1) / 5, td1 = p / 5;
+          const tl0 = (r - 1) / 3, tl1 = r / 3;
+          const corners = [gPt(td0, tl0), gPt(td0, tl1), gPt(td1, tl1), gPt(td1, tl0)];
+          const xs = corners.map(point => point.x), ys = corners.map(point => point.y);
+          const left = Math.min(...xs), top = Math.min(...ys);
+          return { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top };
         };
+        const gridCorners = [gPt(0, 0), gPt(0, 1), gPt(1, 0), gPt(1, 1)];
+        const gridXs = gridCorners.map(point => point.x), gridYs = gridCorners.map(point => point.y);
+        const gridBox = {
+          left: Math.min(...gridXs), top: Math.min(...gridYs),
+          width: Math.max(...gridXs) - Math.min(...gridXs),
+          height: Math.max(...gridYs) - Math.min(...gridYs),
+        };
+        // 이미지젠 베이스는 4개 깊이 밴드이므로 td=0.2 레일을 추가해 5개를 유지한다.
+        const dividerL = gPt(0.2, 0), dividerR = gPt(0.2, 1);
+        const dividerBox = { left: dividerL.x, top: dividerL.y - 10, width: dividerR.x - dividerL.x, height: 20 };
+        const playerBox = cellBox(playerPos, playerRow);
+        const enemyBox = cellBox(enemyPos, enemyRow);
+        const boxStyle = (box: { left: number; top: number; width: number; height: number }) => ({
+          left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px`,
+        });
         return (
-          <svg className="absolute pointer-events-none select-none"
-            style={{ left:0, top:0, width:'100%', height:'100%', zIndex:3 }}
-            viewBox="0 0 1280 720">
-
-            {/* 바닥 면 */}
-            <polygon
-              points={`${G_NL},${G_NY} ${G_NR},${G_NY} ${G_FR},${G_FY} ${G_FL},${G_FY}`}
-              fill="rgba(30,50,75,0.10)" />
-
-            {/* 셀 하이라이트 */}
-            <polygon points={cellPts(playerPos, playerRow)}
-              fill={sameCell ? 'rgba(220,150,50,0.15)' : 'rgba(59,130,246,0.12)'} />
+          <div className="absolute pointer-events-none select-none" aria-hidden="true"
+            style={{ left: 0, top: 0, width: BATTLE_CANVAS_WIDTH, height: BATTLE_CANVAS_HEIGHT, zIndex: 3 }}>
+            <img src="/bg/battle-grid-base.png" alt="" draggable={false}
+              className="absolute pointer-events-none select-none"
+              style={{ ...boxStyle(gridBox), objectFit: 'fill' }} />
+            <img src="/bg/battle-grid-divider.png" alt="" draggable={false}
+              className="absolute pointer-events-none select-none"
+              style={{ ...boxStyle(dividerBox), objectFit: 'fill' }} />
+            <img src="/bg/battle-cell-highlight.png" alt="" draggable={false}
+              className="absolute pointer-events-none select-none"
+              style={{
+                ...boxStyle(playerBox), objectFit: 'fill',
+                filter: sameCell ? 'hue-rotate(-70deg) saturate(1.6) brightness(1.05)' : undefined,
+              }} />
             {!sameCell && (
-              <polygon points={cellPts(enemyPos, enemyRow)}
-                fill="rgba(239,68,68,0.12)" />
+              <img src="/bg/battle-cell-highlight.png" alt="" draggable={false}
+                className="absolute pointer-events-none select-none"
+                style={{ ...boxStyle(enemyBox), objectFit: 'fill', filter: 'hue-rotate(140deg) saturate(1.8)' }} />
             )}
-
-            {/* 깊이 선 — pos 경계 (앞→뒤 6줄) */}
-            {[0, 0.2, 0.4, 0.6, 0.8, 1.0].map((td, i) => {
-              const l = gPt(td, 0), r = gPt(td, 1);
-              const isEdge = i === 0 || i === 5;
-              return <line key={i}
-                x1={l.x} y1={l.y} x2={r.x} y2={r.y}
-                stroke={`rgba(100,160,220,${isEdge ? 0.35 : 0.22})`}
-                strokeWidth={isEdge ? 1.5 : 1} />;
-            })}
-
-            {/* 레인 선 — row 경계 (좌→우 4줄) */}
-            {[0, 1/3, 2/3, 1].map((tl, i) => {
-              const n = gPt(0, tl), f = gPt(1, tl);
-              return <line key={i}
-                x1={n.x} y1={n.y} x2={f.x} y2={f.y}
-                stroke="rgba(100,160,220,0.25)" strokeWidth={1.5} />;
-            })}
-
-            {/* 포지션 번호 — 근경 왼쪽 */}
-            {[1,2,3,4,5].map(pos => {
-              const pt = gPt((2*pos-1)/10, 0);
+            {[1, 2, 3, 4, 5].map(pos => {
+              const pt = gPt((2 * pos - 1) / 10, 0);
               const isP = pos === playerPos, isE = pos === enemyPos;
-              return <text key={pos} x={pt.x - 18} y={pt.y + 1}
-                fontSize="9" fontWeight="bold"
-                fill={isP && isE ? 'rgba(251,191,36,0.9)'
+              return (
+                <div key={pos} className="absolute" style={{
+                  left: `${pt.x - 18}px`, top: `${pt.y - 5}px`, fontSize: 9, fontWeight: 'bold', lineHeight: 1,
+                  color: isP && isE ? 'rgba(251,191,36,0.9)'
                     : isP ? 'rgba(96,165,250,0.85)'
                     : isE ? 'rgba(248,113,113,0.85)'
-                    : 'rgba(255,255,255,0.25)'}>{pos}</text>;
+                    : 'rgba(255,255,255,0.25)',
+                }}>{pos}</div>
+              );
             })}
-
-            {/* 행 레이블 — 근경 가장자리 */}
-            {(['상','중','하'] as const).map((lbl, i) => {
-              const pt = gPt(0, (i + 0.5) / 3);
-              return <text key={i} x={pt.x + 4} y={pt.y - 5}
-                fontSize="9" fontWeight="bold"
-                fill="rgba(255,255,255,0.22)">{lbl}</text>;
+            {(['상', '중', '하'] as const).map((label, index) => {
+              const pt = gPt(0, (index + 0.5) / 3);
+              return (
+                <div key={label} className="absolute" style={{
+                  left: `${pt.x + 4}px`, top: `${pt.y - 14}px`, fontSize: 9, fontWeight: 'bold', lineHeight: 1,
+                  color: 'rgba(255,255,255,0.22)',
+                }}>{label}</div>
+              );
             })}
-
-            {/* 밀착 경고 */}
             {sameCell && (
-              <text x={pC.x} y={pC.y - 16}
-                textAnchor="middle" fontSize="11" fontWeight="bold"
-                fill="rgba(251,191,36,0.9)">⚔ 밀착</text>
+              <div className="absolute" style={{
+                left: `${pC.x}px`, top: `${pC.y - 27}px`, transform: 'translateX(-50%)',
+                fontSize: 11, fontWeight: 'bold', lineHeight: 1, color: 'rgba(251,191,36,0.9)',
+              }}>⚔ 밀착</div>
             )}
-          </svg>
+          </div>
         );
       })()}
 

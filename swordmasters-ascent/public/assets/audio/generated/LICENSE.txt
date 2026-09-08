@@ -1,0 +1,8 @@
+CC0 1.0 Universal
+
+These original procedurally generated audio assets contain no third-party material. To the extent possible under law, the creator waives all copyright and related rights worldwide under CC0-1.0.
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Theme: heroic
+Generator: generate_game_audio_pack.cjs
+Date: 2026-09-08

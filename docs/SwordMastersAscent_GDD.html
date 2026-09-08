@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SwordMastersAscent</title>
+<style>
+  body { background-color: #ffffff; color: #000000; font-family: -apple-system, "Malgun Gothic", sans-serif; margin: 2rem; line-height: 1.6; }
+  h1, h2, h3, h4, h5, h6 { color: #000000; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  th, td { border: 1px solid #000000; padding: 0.5rem; text-align: left; }
+  figure { margin: 1rem 0; }
+  figure img { display: block; max-width: 100%; max-height: 62vh; width: auto; height: auto; object-fit: contain; margin: 0 auto; }
+  figcaption { font-size: 0.9rem; color: #000000; }
+  code { background-color: #f0f0f0; padding: 0 0.2rem; }
+  @media print {
+    body { background-color: #ffffff; color: #000000; margin: 0.5in; }
+    table, figure { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<figure class="gdd-image"><img src="SwordMastersAscent_gameplay_preview.png" alt="GDD용 콘셉트 이미지이며 실제 게임 화면이 아님"><figcaption>GDD용 콘셉트 이미지이며 실제 게임 화면이 아님</figcaption></figure>
+<h1>SwordMastersAscent</h1>
+<ul><li>문서 유형: 게임</li><li>문서 버전: 1.0</li><li>프로젝트 버전: 1.6.1</li><li>근거 신뢰도: 낮음-중간</li></ul>
+<h2>1. 문서 메타데이터와 근거 범례</h2>
+<ul><li>문서 버전 1.0, 대상 프로젝트 버전 1.6.1(<code>SwordMastersAscent_v1.6.1_portable.exe</code> 파일명 기준, 사실)</li><li>범례: [사실] = 파일 경로/파일명으로 존재가 확인된 항목, [제안] = 파일 구조에서 합리적으로 유추했으나 본문 검증은 못한 항목</li><li>본 회차는 Read 도구 접근이 차단되어 파일 본문을 열람하지 못했으므로, 대부분의 세부 서술은 [제안]으로 표기함</li></ul>
+<h2>2. 문제 정의</h2>
+<p>액션 전투 게임에서 플레이어가 자신의 공격/피격 타이밍과 결과를 즉각적으로 인지하지 못해 전투 몰입이 끊기는 문제가 존재한다(근거: <code>docs/superpowers/specs/2026-05-13-combat-hud-redesign-design.md</code> 및 <code>tests/combat-feedback.test.cjs</code> 파일 존재, [사실]).<br>- HUD 정보가 과다하거나 불명확해 유파(검술) 선택과 성장 방향 판단이 어려울 수 있다는 것이 재설계 스펙 문서의 존재로 유추됨 [제안].</p>
+<h2>3. 한 줄 피치와 제품 포지셔닝</h2>
+<p>검술 유파(sword school)를 선택하고 성장시키며 반복 전투를 통해 실력을 증명하는 액션 게임 [제안, <code>tests/sword-schools.test.cjs</code> 파일명 근거].<br>- 포지셔닝: 소규모 팀 개발의 PC 포터블 실행형 액션 타이틀(포터블 exe 배포 방식, [사실]).</p>
+<h2>4. 주 페르소나</h2>
+<p>이름: 김도현, 28세, IT 스타트업 백엔드 개발자. 퇴근 후 30분~1시간 짧은 세션으로 액션 게임을 즐기며, 반복 전투의 타격감과 눈에 보이는 성장(유파 숙련도)을 중시함 [제안, 페르소나 자체는 설계 산출물].<br>- <code>docs/persona_playtest_feedback.md</code> 파일이 존재하여 페르소나 기반 플레이테스트 프로세스가 실제로 운영되었음을 시사함 [사실: 파일 존재].</p>
+<h2>5. 디자인 기둥과 핵심 재미</h2>
+<ul><li>유파별 차별화된 전투 스타일 (근거: <code>sword-schools.test.cjs</code> [사실: 파일 존재])</li><li>즉각적이고 명확한 전투 피드백 (근거: <code>combat-feedback.test.cjs</code>, HUD 재설계 스펙 [사실: 파일 존재])</li><li>반복 가능한 짧은 전투 루프를 통한 성장감 [제안]</li></ul>
+<h2>6. 핵심 루프</h2>
+<p>유저가 선택을 하면 결과가 되고, 그 결과 때문에 다시 선택을 한다.</p>
+<p>탐색하여 적을 만나고, 전투로 유파 숙련도를 쌓고, 성장한 힘으로 더 강한 적에 도전한 뒤, 다시 탐색으로 돌아간다. [제안: 파일명 기반 유추, 정확한 루프 문구는 본문 미확인]</p>
+<h2>7. 최초 30초 플레이 흐름</h2>
+<ul><li>게임 시작 후 유파 또는 캐릭터 소개 화면 노출 [제안]</li><li>짧은 튜토리얼성 전투 조우로 기본 공격/회피 조작 안내 [제안]</li><li>첫 전투 승리 후 즉각적인 피드백(타격 이펙트, 보상 표시) 제공 [제안, <code>combat-feedback.test.cjs</code> 근거]</li></ul>
+<h2>8. 게임 규칙과 승패 조건</h2>
+<p>플레이어는 체력이 0이 되면 패배하며, 적을 처치하면 승리로 처리되는 기본 액션 전투 규칙을 따르는 것으로 유추됨 [제안, 본문 미확인].<br>- 유파별 고유 승패 조건 변형 여부는 확인되지 않음.</p>
+<h2>9. 콘텐츠, 진행, 성장, 경제 구조</h2>
+<ul><li>복수의 검술 유파가 콘텐츠 축으로 존재 [사실: <code>sword-schools.test.cjs</code> 파일 존재]</li><li>릴리스별 명칭 체계가 관리되고 있음 [사실: <code>release-names.test.cjs</code> 파일 존재]</li><li>구체적 성장 수치·경제 재화 구조는 본문 미확인으로 서술 불가</li></ul>
+<h2>10. MVP 가설과 검증 방법</h2>
+<ul><li>가설 1: 유파 선택이 플레이어의 전투 스타일 다양성 인지를 높인다 → 플레이테스트 인터뷰로 검증 [제안]</li><li>가설 2: 개선된 전투 피드백(HUD 재설계)이 타격감 인지를 향상시킨다 → <code>persona_playtest_feedback.md</code> 기반 페르소나 플레이테스트로 검증 [사실: 파일 존재 근거, 결과 미확인]</li></ul>
+<h2>11. 레퍼런스별 핵심 행동 단계 수와 적용 교훈</h2>
+<ul><li>레퍼런스 A(소울라이크 계열 액션): 회피-타격-후퇴 3단계 핵심 행동 루프 → 짧고 명확한 판정 창 적용 시사 [제안, 검증 안 됨]</li><li>레퍼런스 B(하이브리드 액션 RPG): 스킬 선택-강화-재도전 3단계 → 유파 성장 구조에 참고 [제안, 검증 안 됨]</li><li>두 레퍼런스 모두 본 프로젝트 문서에서 직접 확인되지 않았으며 설계 참고용 제안임을 명시함</li></ul>
+<p>[제안] 적용 교훈은 회피 → 타격 → 후퇴의 3단계마다 공격 가능 창과 피격 위험을 색상뿐 아니라 동작·효과음으로도 구분하는 것이다.</p>
+<h2>12. 수치 KPI와 측정 방법</h2>
+<ul><li>검증 목표: 첫 세션 리텐션(D1) 향상 여부를 확인 → 페르소나 플레이테스트 세션 로그 기반 정성 인터뷰로 측정 [제안]</li><li>검증 목표: 전투 피드백 인지 개선 여부 → <code>persona_playtest_feedback.md</code> 재수집 및 비교로 측정 [제안, 구체적 목표 수치는 문서 미확인으로 명시 불가]</li></ul>
+<h2>13. UI, HUD, 컨트롤</h2>
+<p>5개 핵심 UI 상태: (1) 타이틀/메인 화면, (2) 유파 선택 화면, (3) 전투 중 HUD(체력/스태미나/피드백 이펙트), (4) 결과/보상 화면, (5) 성장/강화 화면 [제안, HUD 재설계 스펙 문서 존재가 (3)의 근거].</p>
+<h2>14. 로딩·빈 상태·에러·100개 이상 데이터·3배 긴 텍스트 대응</h2>
+<ul><li>로딩 중에는 진행 표시와 취소 불가 안내가 필요할 것으로 제안됨 [제안]</li><li>유파/아이템 목록이 100개 이상으로 늘어날 경우 가상 스크롤 또는 페이지네이션 적용 필요 [제안]</li><li>텍스트 길이가 3배로 늘어나는 다국어 상황(한글↔영문) 대비 UI 줄바꿈 처리 필요 [제안, 실제 구현 확인 안 됨]</li></ul>
+<h2>15. 접근성</h2>
+<ul><li>키 리매핑 및 텍스트 크기 조절 옵션 필요성 제안 [제안]</li><li>색약 사용자를 위한 전투 피드백 색상 대비 보완 필요 [제안, <code>combat-feedback.test.cjs</code> 존재를 근거로 관련 고려가 있었을 가능성 시사]</li><li>실제 접근성 구현 여부는 본문 미확인</li></ul>
+<h2>16. 시각·청각·햅틱 피드백</h2>
+<p>전투 시 시각적 타격 이펙트와 관련 로직이 존재하는 것으로 유추됨(<code>combat-feedback.test.cjs</code> 파일 존재, [사실]).<br>- 청각·햅틱 피드백의 구체적 구현 여부는 본문 미확인으로 확인 불가.</p>
+<h2>17. 구현 상태 매트릭스</h2>
+<table><thead><tr><th>기능</th><th>근거 파일</th><th>상태</th></tr></thead><tbody><tr><td>검술 유파 시스템</td><td><code>tests/sword-schools.test.cjs</code></td><td>사실: 테스트 파일 존재</td></tr><tr><td>전투 피드백</td><td><code>tests/combat-feedback.test.cjs</code></td><td>사실: 테스트 파일 존재</td></tr><tr><td>릴리스 명칭 체계</td><td><code>tests/release-names.test.cjs</code></td><td>사실: 테스트 파일 존재</td></tr><tr><td>HUD 재설계</td><td><code>docs/superpowers/specs/2026-05-13-combat-hud-redesign-design.md</code></td><td>사실: 스펙 문서 존재, 구현 여부 미확인</td></tr></tbody></table>
+<h2>18. 빌드·테스트 근거</h2>
+<ul><li>Next.js 빌드 산출물 존재 확인: <code>.next/build-manifest.json</code>, <code>.next/BUILD_ID</code> [사실]</li><li>포터블 실행 파일 존재 확인: <code>SwordMastersAscent_v1.6.1_portable.exe</code> [사실]</li><li>테스트 파일 3종 존재 확인(<code>combat-feedback.test.cjs</code>, <code>sword-schools.test.cjs</code>, <code>release-names.test.cjs</code>), 단 실행 결과나 커버리지는 확인하지 못함 [사실: 파일 존재만, 결과 미확인]</li></ul>
+<h2>19. 알려진 리스크와 실패 시나리오</h2>
+<ul><li>전투 피드백이 여전히 불명확할 경우 재설계 스펙(2026-05-13)에도 불구하고 문제가 재발할 위험 [제안]</li><li>유파 시스템의 밸런스가 무너지면 특정 유파 편중 현상이 발생할 수 있음 [제안]</li><li>본문 미확인으로 실제 발생한 리스크인지는 검증되지 않음</li></ul>
+<h2>20. 다음 우선순위</h2>
+<p><code>docs/next_improvement_instruction.md</code> 파일이 존재하여 다음 개선 방향에 대한 지침이 별도로 관리되고 있음을 확인함 [사실: 파일 존재].<br>- 해당 문서의 구체적 우선순위 내용은 본문 미확인으로 인용하지 못함.</p>
+</body>
+</html>
