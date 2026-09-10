@@ -1,6 +1,6 @@
-﻿# SwordMastersAscent 기획서 v1.5.68
+﻿# SwordMastersAscent 기획서 v1.7.1
 
-> 최종 수정: 2026-06-30 | 버전: 1.5.68 | 실제 구현 코드(src/lib/gameData.ts, src/components/SwordmastersAscent.tsx) 기준으로 동기화
+> 최종 수정: 2026-09-10 | 버전: 1.7.1 | 실제 구현 코드(src/lib/gameData.ts, src/components/SwordmastersAscent.tsx) 기준으로 동기화
 ## v1.6.0 Dirty Verification Note (2026-07-02)
 
 - Persona confidence focus: action roguelite player readability for combat feedback and release readiness.
@@ -142,7 +142,7 @@ npm run build     # TypeScript 빌드
 npm run dist      # 버전 자동 증가 + exe 생성
 ```
 
-- 현재 버전: **1.5.68**
+- 현재 버전: **1.7.1**
 - 저장 방식: localStorage 기반 3슬롯 세이브 (서버 비용 없음)
 - 데스크톱: Electron + 내장 HTTP 서버 (`127.0.0.1:포트`)로 로드 (`loadFile` 금지)
 - 웹 버전: 스팀 출시 전 무료 데모 역할 겸용
@@ -271,4 +271,13 @@ Steam 상업 성공 목표보다 **웹 무료판 유저 확보 → 피드백 반
 - **재생**: 브라우저는 사용자 제스처 이후 시작하며 Unity는 Resources 기반 AudioSource로 로드
 - **권장 믹스**: BGM 0.28, SFX 0.70
 - **라이선스**: 각 오디오 자산 폴더에 CC0 고지 보관
+
+## v1.7.1 런타임 격자 비율 수정 및 릴리스 경로 정합 (2026-09-10)
+
+- 런타임 전장 원근 격자가 ImageGen 래스터 `battle-grid-wide-v002.png`로 교체되었다. 네이티브 해상도 1940×360이 런타임 격자 슬롯 970×180과 정확히 같은 비율이라 왜곡 없이 맞아떨어진다.
+- 기존 1672×941 레거시 베이스 이미지를 늘려 채우던 방식 대신 `objectFit: 'contain'`으로 렌더링해 비율을 왜곡하지 않는다.
+- 한국어 UI 폰트 스택이 Pretendard → Noto Sans KR → Malgun Gothic 로컬 폴백 순으로 우선 적용되도록 `globals.css` `body` 규칙이 갱신되었다.
+- 릴리스 업로드 스크립트(`scripts/upload-release-to-drive.js`)의 `driveDir`이 실제 중앙 관리 폴더 `G:\내 드라이브\02_게임_실행파일`을 가리키도록 정정되었다.
+- 신규 계약 테스트(`tests/battle-grid-wide-v002.test.cjs`)가 PNG 크기/비율, 런타임 배선과 fit 방식, 한국어 폰트 폴백 순서, Drive 업로드 경로를 검증한다.
+- 검증: 위 4개 항목을 다루는 계약 테스트 스위트 추가. 최종 버전 **1.7.1**, 날짜 2026-09-10.
 

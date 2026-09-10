@@ -3242,9 +3242,9 @@ export default function SwordmastersAscent() {
         return (
           <div className="absolute pointer-events-none select-none" aria-hidden="true"
             style={{ left: 0, top: 0, width: BATTLE_CANVAS_WIDTH, height: BATTLE_CANVAS_HEIGHT, zIndex: 3 }}>
-            <img src="/bg/battle-grid-base.png" alt="" draggable={false}
+            <img src="/bg/battle-grid-wide-v002.png" alt="" draggable={false}
               className="absolute pointer-events-none select-none"
-              style={{ ...boxStyle(gridBox), objectFit: 'fill' }} />
+              style={{ ...boxStyle(gridBox), objectFit: 'contain' }} />
             <img src="/bg/battle-grid-divider.png" alt="" draggable={false}
               className="absolute pointer-events-none select-none"
               style={{ ...boxStyle(dividerBox), objectFit: 'fill' }} />
