@@ -1,69 +1,375 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SwordMastersAscent</title>
+<title>SwordMastersAscent (T of Sword) — Game Design Document</title>
 <style>
-  body { background-color: #ffffff; color: #000000; font-family: -apple-system, "Malgun Gothic", sans-serif; margin: 2rem; line-height: 1.6; }
-  h1, h2, h3, h4, h5, h6 { color: #000000; }
-  table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-  th, td { border: 1px solid #000000; padding: 0.5rem; text-align: left; }
-  figure { margin: 1rem 0; }
-  figure img { display: block; max-width: 100%; max-height: 62vh; width: auto; height: auto; object-fit: contain; margin: 0 auto; }
-  figcaption { font-size: 0.9rem; color: #000000; }
-  code { background-color: #f0f0f0; padding: 0 0.2rem; }
-  @media print {
-    body { background-color: #ffffff; color: #000000; margin: 0.5in; }
-    table, figure { page-break-inside: avoid; }
-  }
+:root{
+  --rev-1:#b91c1c;--rev-2:#c2410c;--rev-3:#a16207;--rev-4:#15803d;
+  --rev-5:#1d4ed8;--rev-6:#7e22ce;--rev-7:#be185d;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;padding:2rem;max-width:960px;margin-inline:auto;
+  font-family:'Malgun Gothic','Noto Sans KR',-apple-system,BlinkMacSystemFont,sans-serif;
+  line-height:1.75;color:#1f2328;word-break:keep-all;overflow-wrap:break-word;background:#fff;
+}
+h1,h2,h3,h4,h5,h6{line-height:1.35;margin-top:2em;margin-bottom:.6em}
+h1{font-size:1.9rem;border-bottom:2px solid #e2e2e2;padding-bottom:.3em}
+h2{font-size:1.5rem}
+h3{font-size:1.2rem}
+a{color:#1d4ed8}
+img{max-width:100%;height:auto;display:block;margin:1em 0;border-radius:4px}
+.table-wrap{overflow-x:auto;margin:1em 0}
+table{border-collapse:collapse;width:100%;font-size:.95rem}
+th,td{border:1px solid #d0d7de;padding:.5em .75em;text-align:left}
+th{background:#f6f8fa}
+pre{background:#f6f8fa;padding:1em;overflow-x:auto;border-radius:6px;border:1px solid #e2e2e2}
+code{font-family:'D2Coding',Consolas,'Courier New',monospace;font-size:.9em}
+:not(pre)>code{background:#f0f2f4;padding:.15em .4em;border-radius:4px}
+blockquote{border-left:4px solid #d0d7de;margin:1em 0;padding:.2em 1em;color:#57606a}
+.rev-1{color:var(--rev-1);font-weight:600}
+.rev-2{color:var(--rev-2);font-weight:600}
+.rev-3{color:var(--rev-3);font-weight:600}
+.rev-4{color:var(--rev-4);font-weight:600}
+.rev-5{color:var(--rev-5);font-weight:600}
+.rev-6{color:var(--rev-6);font-weight:600}
+.rev-7{color:var(--rev-7);font-weight:600}
+@media print{
+  body{padding:0;max-width:none}
+  a{color:inherit;text-decoration:none}
+}
 </style>
 </head>
 <body>
-<figure class="gdd-image"><img src="SwordMastersAscent_gameplay_preview.png" alt="GDD용 콘셉트 이미지이며 실제 게임 화면이 아님"><figcaption>GDD용 콘셉트 이미지이며 실제 게임 화면이 아님</figcaption></figure>
-<h1>SwordMastersAscent</h1>
-<ul><li>문서 유형: 게임</li><li>문서 버전: 1.0</li><li>프로젝트 버전: 1.6.1</li><li>근거 신뢰도: 낮음-중간</li></ul>
-<h2>1. 문서 메타데이터와 근거 범례</h2>
-<ul><li>문서 버전 1.0, 대상 프로젝트 버전 1.6.1(<code>SwordMastersAscent_v1.6.1_portable.exe</code> 파일명 기준, 사실)</li><li>범례: [사실] = 파일 경로/파일명으로 존재가 확인된 항목, [제안] = 파일 구조에서 합리적으로 유추했으나 본문 검증은 못한 항목</li><li>본 회차는 Read 도구 접근이 차단되어 파일 본문을 열람하지 못했으므로, 대부분의 세부 서술은 [제안]으로 표기함</li></ul>
-<h2>2. 문제 정의</h2>
-<p>액션 전투 게임에서 플레이어가 자신의 공격/피격 타이밍과 결과를 즉각적으로 인지하지 못해 전투 몰입이 끊기는 문제가 존재한다(근거: <code>docs/superpowers/specs/2026-05-13-combat-hud-redesign-design.md</code> 및 <code>tests/combat-feedback.test.cjs</code> 파일 존재, [사실]).<br>- HUD 정보가 과다하거나 불명확해 유파(검술) 선택과 성장 방향 판단이 어려울 수 있다는 것이 재설계 스펙 문서의 존재로 유추됨 [제안].</p>
-<h2>3. 한 줄 피치와 제품 포지셔닝</h2>
-<p>검술 유파(sword school)를 선택하고 성장시키며 반복 전투를 통해 실력을 증명하는 액션 게임 [제안, <code>tests/sword-schools.test.cjs</code> 파일명 근거].<br>- 포지셔닝: 소규모 팀 개발의 PC 포터블 실행형 액션 타이틀(포터블 exe 배포 방식, [사실]).</p>
-<h2>4. 주 페르소나</h2>
-<p>이름: 김도현, 28세, IT 스타트업 백엔드 개발자. 퇴근 후 30분~1시간 짧은 세션으로 액션 게임을 즐기며, 반복 전투의 타격감과 눈에 보이는 성장(유파 숙련도)을 중시함 [제안, 페르소나 자체는 설계 산출물].<br>- <code>docs/persona_playtest_feedback.md</code> 파일이 존재하여 페르소나 기반 플레이테스트 프로세스가 실제로 운영되었음을 시사함 [사실: 파일 존재].</p>
-<h2>5. 디자인 기둥과 핵심 재미</h2>
-<ul><li>유파별 차별화된 전투 스타일 (근거: <code>sword-schools.test.cjs</code> [사실: 파일 존재])</li><li>즉각적이고 명확한 전투 피드백 (근거: <code>combat-feedback.test.cjs</code>, HUD 재설계 스펙 [사실: 파일 존재])</li><li>반복 가능한 짧은 전투 루프를 통한 성장감 [제안]</li></ul>
-<h2>6. 핵심 루프</h2>
-<p>유저가 선택을 하면 결과가 되고, 그 결과 때문에 다시 선택을 한다.</p>
-<p>탐색하여 적을 만나고, 전투로 유파 숙련도를 쌓고, 성장한 힘으로 더 강한 적에 도전한 뒤, 다시 탐색으로 돌아간다. [제안: 파일명 기반 유추, 정확한 루프 문구는 본문 미확인]</p>
-<h2>7. 최초 30초 플레이 흐름</h2>
-<ul><li>게임 시작 후 유파 또는 캐릭터 소개 화면 노출 [제안]</li><li>짧은 튜토리얼성 전투 조우로 기본 공격/회피 조작 안내 [제안]</li><li>첫 전투 승리 후 즉각적인 피드백(타격 이펙트, 보상 표시) 제공 [제안, <code>combat-feedback.test.cjs</code> 근거]</li></ul>
-<h2>8. 게임 규칙과 승패 조건</h2>
-<p>플레이어는 체력이 0이 되면 패배하며, 적을 처치하면 승리로 처리되는 기본 액션 전투 규칙을 따르는 것으로 유추됨 [제안, 본문 미확인].<br>- 유파별 고유 승패 조건 변형 여부는 확인되지 않음.</p>
-<h2>9. 콘텐츠, 진행, 성장, 경제 구조</h2>
-<ul><li>복수의 검술 유파가 콘텐츠 축으로 존재 [사실: <code>sword-schools.test.cjs</code> 파일 존재]</li><li>릴리스별 명칭 체계가 관리되고 있음 [사실: <code>release-names.test.cjs</code> 파일 존재]</li><li>구체적 성장 수치·경제 재화 구조는 본문 미확인으로 서술 불가</li></ul>
-<h2>10. MVP 가설과 검증 방법</h2>
-<ul><li>가설 1: 유파 선택이 플레이어의 전투 스타일 다양성 인지를 높인다 → 플레이테스트 인터뷰로 검증 [제안]</li><li>가설 2: 개선된 전투 피드백(HUD 재설계)이 타격감 인지를 향상시킨다 → <code>persona_playtest_feedback.md</code> 기반 페르소나 플레이테스트로 검증 [사실: 파일 존재 근거, 결과 미확인]</li></ul>
-<h2>11. 레퍼런스별 핵심 행동 단계 수와 적용 교훈</h2>
-<ul><li>레퍼런스 A(소울라이크 계열 액션): 회피-타격-후퇴 3단계 핵심 행동 루프 → 짧고 명확한 판정 창 적용 시사 [제안, 검증 안 됨]</li><li>레퍼런스 B(하이브리드 액션 RPG): 스킬 선택-강화-재도전 3단계 → 유파 성장 구조에 참고 [제안, 검증 안 됨]</li><li>두 레퍼런스 모두 본 프로젝트 문서에서 직접 확인되지 않았으며 설계 참고용 제안임을 명시함</li></ul>
-<p>[제안] 적용 교훈은 회피 → 타격 → 후퇴의 3단계마다 공격 가능 창과 피격 위험을 색상뿐 아니라 동작·효과음으로도 구분하는 것이다.</p>
-<h2>12. 수치 KPI와 측정 방법</h2>
-<ul><li>검증 목표: 첫 세션 리텐션(D1) 향상 여부를 확인 → 페르소나 플레이테스트 세션 로그 기반 정성 인터뷰로 측정 [제안]</li><li>검증 목표: 전투 피드백 인지 개선 여부 → <code>persona_playtest_feedback.md</code> 재수집 및 비교로 측정 [제안, 구체적 목표 수치는 문서 미확인으로 명시 불가]</li></ul>
-<h2>13. UI, HUD, 컨트롤</h2>
-<p>5개 핵심 UI 상태: (1) 타이틀/메인 화면, (2) 유파 선택 화면, (3) 전투 중 HUD(체력/스태미나/피드백 이펙트), (4) 결과/보상 화면, (5) 성장/강화 화면 [제안, HUD 재설계 스펙 문서 존재가 (3)의 근거].</p>
-<h2>14. 로딩·빈 상태·에러·100개 이상 데이터·3배 긴 텍스트 대응</h2>
-<ul><li>로딩 중에는 진행 표시와 취소 불가 안내가 필요할 것으로 제안됨 [제안]</li><li>유파/아이템 목록이 100개 이상으로 늘어날 경우 가상 스크롤 또는 페이지네이션 적용 필요 [제안]</li><li>텍스트 길이가 3배로 늘어나는 다국어 상황(한글↔영문) 대비 UI 줄바꿈 처리 필요 [제안, 실제 구현 확인 안 됨]</li></ul>
-<h2>15. 접근성</h2>
-<ul><li>키 리매핑 및 텍스트 크기 조절 옵션 필요성 제안 [제안]</li><li>색약 사용자를 위한 전투 피드백 색상 대비 보완 필요 [제안, <code>combat-feedback.test.cjs</code> 존재를 근거로 관련 고려가 있었을 가능성 시사]</li><li>실제 접근성 구현 여부는 본문 미확인</li></ul>
-<h2>16. 시각·청각·햅틱 피드백</h2>
-<p>전투 시 시각적 타격 이펙트와 관련 로직이 존재하는 것으로 유추됨(<code>combat-feedback.test.cjs</code> 파일 존재, [사실]).<br>- 청각·햅틱 피드백의 구체적 구현 여부는 본문 미확인으로 확인 불가.</p>
-<h2>17. 구현 상태 매트릭스</h2>
-<table><thead><tr><th>기능</th><th>근거 파일</th><th>상태</th></tr></thead><tbody><tr><td>검술 유파 시스템</td><td><code>tests/sword-schools.test.cjs</code></td><td>사실: 테스트 파일 존재</td></tr><tr><td>전투 피드백</td><td><code>tests/combat-feedback.test.cjs</code></td><td>사실: 테스트 파일 존재</td></tr><tr><td>릴리스 명칭 체계</td><td><code>tests/release-names.test.cjs</code></td><td>사실: 테스트 파일 존재</td></tr><tr><td>HUD 재설계</td><td><code>docs/superpowers/specs/2026-05-13-combat-hud-redesign-design.md</code></td><td>사실: 스펙 문서 존재, 구현 여부 미확인</td></tr></tbody></table>
-<h2>18. 빌드·테스트 근거</h2>
-<ul><li>Next.js 빌드 산출물 존재 확인: <code>.next/build-manifest.json</code>, <code>.next/BUILD_ID</code> [사실]</li><li>포터블 실행 파일 존재 확인: <code>SwordMastersAscent_v1.6.1_portable.exe</code> [사실]</li><li>테스트 파일 3종 존재 확인(<code>combat-feedback.test.cjs</code>, <code>sword-schools.test.cjs</code>, <code>release-names.test.cjs</code>), 단 실행 결과나 커버리지는 확인하지 못함 [사실: 파일 존재만, 결과 미확인]</li></ul>
-<h2>19. 알려진 리스크와 실패 시나리오</h2>
-<ul><li>전투 피드백이 여전히 불명확할 경우 재설계 스펙(2026-05-13)에도 불구하고 문제가 재발할 위험 [제안]</li><li>유파 시스템의 밸런스가 무너지면 특정 유파 편중 현상이 발생할 수 있음 [제안]</li><li>본문 미확인으로 실제 발생한 리스크인지는 검증되지 않음</li></ul>
-<h2>20. 다음 우선순위</h2>
-<p><code>docs/next_improvement_instruction.md</code> 파일이 존재하여 다음 개선 방향에 대한 지침이 별도로 관리되고 있음을 확인함 [사실: 파일 존재].<br>- 해당 문서의 구체적 우선순위 내용은 본문 미확인으로 인용하지 못함.</p>
+<main>
+<h1>SwordMastersAscent (T of Sword) — Game Design Document</h1>
+<p><img src="./SwordMastersAscent_gameplay_preview.png" alt="Gameplay Preview"></p>
+<ul>
+<li>문서 유형: 게임 기획서 (GDD)</li>
+<li>문서 버전: 2.1</li>
+<li>프로젝트 버전: 1.7.1 (<code>package.json</code> <code>version</code> 필드, 사실 검증됨)</li>
+<li>최종 수정: 2026-09-11 (KST)</li>
+<li>근거 신뢰도: 높음 — 이번 회차는 실제 코드 파일(<code>src/lib/gameData.ts</code> 1882줄 전체, <code>src/lib/swordSchools.json</code>, <code>src/components/SwordmastersAscent.tsx</code>)과 테스트 파일(<code>tests/combat-feedback.test.cjs</code> 등)을 직접 열람하여 검증함. 이전 버전(2.0)에서 발견된 두 건의 수치 오류(오디오 파일 개수, 전투 피드백 테스트 개수)를 정정함.</li>
+<li>범례: <strong>[검증됨]</strong> = 코드/테스트에서 직접 확인, <strong>[미검증]</strong> = 파일 존재는 확인했으나 본문 세부 로직까지 확인하지 못했거나 코드에서 근거를 찾지 못함 (절대 창작하지 않음), <strong>[제안]</strong> = 이번 문서에서 새로 제안하는 설계 아이디어(구현되지 않음)</li>
+</ul>
+<p>이전 버전(문서 버전 1.0, 2026-06-30 이전)은 Read 도구 제한으로 대부분 [제안] 처리되어 있었다. 이번 개정은 실제 소스 코드를 근거로 재작성한 것이며, <code>gameplay_preview</code> 상대 경로 참조가 있었다면 보존한다(이번 회차 원본에는 해당 참조가 없어 추가하지 않음).</p>
+<hr>
+<h2>1. 문제 정의</h2>
+<p>기존 문서(v1.0) 및 <code>docs/next_improvement_instruction.md</code> [검증됨: 파일 열람]에 따르면, 이 프로젝트가 실제로 다룬 핵심 문제는 다음과 같다:</p>
+<ul>
+<li>액션 전투에서 공격 예비동작(windup), 명중 결과, 회피 성공, 피격 반응이 한 번의 인지 동작으로 구분되지 않아 전투 판단이 늦어지는 문제 [검증됨: <code>docs/next_improvement_instruction.md</code> Instruction 1, <code>tests/combat-feedback.test.cjs</code>].</li>
+<li>첫 3분 루프에서 다음 등반 목표, 현재 보상 선택지, 성장 선택의 결과가 한눈에 보이지 않는 문제 [검증됨: <code>next_improvement_instruction.md</code> Instruction 2].</li>
+<li>검술 유파(빌드) 선택이 실제 전투 스타일 차이로 체감되지 않을 수 있다는 리스크 [검증됨: <code>sword-schools.test.cjs</code> 존재 및 <code>swordSchools.json</code>/<code>createPlayer()</code> 코드로 실제 능력치·인벤토리 분기 확인].</li>
+</ul>
+<h2>2. 페르소나 (주 페르소나)</h2>
+<p>이름: 김도현, 28세, IT 스타트업 백엔드 개발자 [기존 v1.0 문서 계승, 설계 산출물]. 퇴근 후 30분~1시간의 짧은 세션으로 액션 게임을 즐기며, 반복 전투의 타격감과 눈에 보이는 성장(칭호·유파 숙련도)을 중시한다.</p>
+<ul>
+<li>이 페르소나의 실제 플레이테스트 운영 여부는 <code>docs/persona_playtest_feedback.md</code> 파일 존재로 시사되나, 본문 내용은 이번 회차 조사 범위 밖이라 **[미검증]**으로 남긴다.</li>
+<li>맥락: 포터블 실행 파일(<code>SwordMastersAscent_v{version}_portable.exe</code>, <code>package.json</code>의 <code>portable.artifactName</code> [검증됨])로 배포되는 PC 단독 실행형 로그라이트 액션. 별도 설치나 로그인 없이 즉시 실행 가능.</li>
+</ul>
+<h2>3. 코어 루프 (X → Y → X)</h2>
+<p><strong>선택(X) → 판정/전투(Y) → 성장/보상(X)</strong> 순환:</p>
+<ol>
+<li>플레이어가 층에 입장해 적과 조우한다.</li>
+<li>매 턴 메인 행동(공격/이동/방어/마법 사용/아이템 사용, 5종)과 서브 행동을 선택한다 — 이는 적의 예측 정보(확률 힌트)와 가위바위보식 완전 카운터 관계(<code>PERFECT_COUNTER</code>) 위에서 이루어지는 판단이다 [검증됨: <code>gameData.ts</code> <code>SUB_ACTIONS</code>, <code>PERFECT_COUNTER</code>, <code>generateEnemyIntent</code>].</li>
+<li>속도 주사위 → 힘싸움 주사위 → (마법 시전 시) 마법 성공 주사위 순으로 3단계 판정을 거쳐 피해/회피/부상이 결정된다 [검증됨: <code>resolveTurn()</code>].</li>
+<li>승리 시 장비/아이템/칭호 보상을 받고, 다음 층으로 올라가거나 층 이벤트(쉼터/행상/폐허/맹세)를 만난다 [검증됨: <code>getRewardEquipment</code>, <code>generateCombatTitles</code>, <code>ITEM_REWARD_POOL</code>, <code>generateFloorEvent</code>, <code>shouldTriggerEvent</code>].</li>
+<li>강화된 상태로 다시 다음 적과 조우한다(코어 루프 1로 복귀). 사망 시 레거시 캐릭터로 남아 이후 회차에 유파 이름이 붙은 유령으로 재등장할 수 있다 [검증됨: <code>generateEnemy()</code>의 <code>floorGhosts</code>/<code>legacyCharacters</code> 처리].</li>
+</ol>
+<h2>4. MVP 가설</h2>
+<ul>
+<li>가설 1: 완전 카운터 기반 서브 액션 선택(가위바위보 확장판)과 3단계 주사위 판정을 결합하면, 무작위성과 플레이어 판단력이 공존하는 짧은 전투 루프가 만들어진다 → 검증 방법: <code>tests/*.test.cjs</code> 단위 테스트 및 실제 플레이 세션 관찰 [검증됨: 로직은 코드로 확인, 실제 플레이테스트 결과 수집 여부는 <strong>미검증</strong>].</li>
+<li>가설 2: 전투 피드백을 판정 단계별(예비동작/명중/회피/피격)로 분리하면 타격감 인지가 향상된다 → 검증 방법: <code>tests/combat-feedback.test.cjs</code> (11개 테스트, <code>getCombatFeedbackCues</code> 함수 단위 검증) [검증됨: 테스트 코드 직접 열람, 테스트 개수 재확인].</li>
+<li>가설 3: 5개 검술 유파가 시작 능력치/인벤토리/마법 슬롯을 다르게 하여 실제로 체감 가능한 빌드 차이를 만든다 → 검증 방법: <code>tests/sword-schools.test.cjs</code> + <code>createPlayer()</code> 분기 로직 [검증됨].</li>
+</ul>
+<h2>5. 참고 분석 (레퍼런스)</h2>
+<p>이번 조사에서 프로젝트 내부 문서 중 외부 레퍼런스 게임에 대한 직접적 근거 파일을 찾지 못했다. 과거 v1.0 문서의 &quot;소울라이크/하이브리드 액션 RPG&quot; 레퍼런스는 **[미검증, 원문서에도 제안으로 표기되어 있었음]**이므로 이번 문서에서는 신규 창작 없이 다음만 명시한다:</p>
+<ul>
+<li><code>docs/superpowers/plans/</code> 하위에 실제 구현 계획 문서 5종이 존재한다: <code>2026-04-28-combat-depth.md</code>, <code>2026-04-28-floor-events.md</code>, <code>2026-04-28-meta-progression.md</code>, <code>2026-04-29-injury-system.md</code>, <code>2026-04-29-vfx-enhancement.md</code> [검증됨: 파일 존재]. 이 문서들의 세부 내용(적용 교훈 단계)은 이번 조사 범위에서 본문까지 열람하지 않았으므로 세부 인용은 <strong>[미검증]</strong>.</li>
+<li><code>docs/superpowers/specs/2026-05-13-combat-hud-redesign-design.md</code>, <code>docs/superpowers/plans/2026-05-14-combat-hud-redesign.md</code> 존재 확인 [검증됨: 파일 존재], 세부 내용 <strong>[미검증]</strong>.</li>
+</ul>
+<h2>6. 디자인 필라</h2>
+<ol>
+<li><strong>완전 카운터 기반 판단</strong> — 모든 서브 액션은 정확히 하나의 완벽 카운터를 가진다(<code>PERFECT_COUNTER</code>, 21개 서브 액션 매핑 전체 검증) [검증됨].</li>
+<li><strong>3단계 주사위 판정으로 만드는 불확실성 속 실력</strong> — 속도 주사위(선제/회피) → 힘싸움 주사위(피해 배율) → 마법 주사위(2d6, 6 이상 성공/10 이상 강화) [검증됨: <code>resolveTurn</code>].</li>
+<li><strong>포지션 + 행(Row) 이중 그리드 전투</strong> — 좌우 거리(1<del>5칸)와 상하 3행(1</del>3, 기본 2)을 동시에 관리해야 공격이 명중한다(공격은 동일 행에서만 명중, 마법·투척은 행 무관) [검증됨: <code>isAttackHitByRow</code>, <code>calcNewRow</code>, <code>COMBAT_ROW_MIN/MAX</code>].</li>
+<li><strong>누적되는 성장과 상흔(부상)</strong> — 큰 피해를 받으면 확률적으로 팔/다리/몸통 부상이 생겨 다음 전투 능력치에 지속 페널티를 준다 [검증됨: <code>rollInjury</code>, <code>getInjuryStatMult</code>, <code>getBodyInjuryStaminaDrain</code>].</li>
+<li><strong>유파 선택에 따른 시작 빌드 분기</strong> — 5개 유파가 능력치·인벤토리·마법 슬롯을 바꾼다 [검증됨].</li>
+</ol>
+<h2>7. 컴포넌트 표</h2>
+<h3>구성요소</h3>
+<p>이 표는 게임의 핵심 구성요소를 정리한다.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>컴포넌트</th>
+<th>역할</th>
+<th>플레이어 선택지</th>
+<th>입력→판단→피드백</th>
+<th>구현 상태</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>유파 선택 (StatRollScreen 이전 단계)</td>
+<td>시작 빌드 결정</td>
+<td>균형검/암영검/비전검/주술검/철벽검 중 1개</td>
+<td>이름 입력→유파 카드 확인→선택 즉시 보너스 요약 표시(<code>bonusSummary</code>)</td>
+<td>구현됨 [검증됨]</td>
+</tr>
+<tr>
+<td>능력치 굴림 (StatRollScreen)</td>
+<td>시작 능력치 확정</td>
+<td>굴림 결과 확인 후 진행</td>
+<td>굴림→수치 표시→하이스코어 보너스(<code>highScore*0.1</code>) 안내 문구</td>
+<td>구현됨 [검증됨]</td>
+</tr>
+<tr>
+<td>메인/서브 행동 선택 (CombatStep)</td>
+<td>턴별 전략 입력</td>
+<td>5개 메인 행동 × 각 2~6개 서브 행동</td>
+<td>적 의도 확률 힌트 확인→서브 선택→주사위 결과·데미지·상태이상 텍스트 피드백</td>
+<td>구현됨 [검증됨: <code>CombatStep</code> 타입 <code>select_main→select_sub→rolling→result</code>]</td>
+</tr>
+<tr>
+<td>층 이벤트 (FloorEvent)</td>
+<td>루프 사이 리스크/리턴 선택</td>
+<td>쉼터(휴식/단련/부상치료/무시), 행상(민첩/방어구매/무시), 폐허(도박2종/무시), 맹세(힘/민첩/거부)</td>
+<td>선택→즉시 apply()로 스탯 변화→다음 층 진입</td>
+<td>구현됨 [검증됨: <code>generateFloorEvent</code>]</td>
+</tr>
+<tr>
+<td>보상 화면 (reward phase)</td>
+<td>전투 후 성장</td>
+<td>장비 1개 + 아이템 보상 + 칭호 3개 중 선택</td>
+<td>승리→즉시 보상 후보 3종 롤→선택 반영</td>
+<td>구현됨 [검증됨: <code>getRewardEquipment</code>, <code>ITEM_REWARD_POOL</code>, <code>generateCombatTitles</code>]</td>
+</tr>
+<tr>
+<td>튜토리얼 (TutorialScreen)</td>
+<td>온보딩</td>
+<td>세계관 2단계 + 시스템 가이드 N단계 진행</td>
+<td>스텝 진행바(2칸 세계관/파랑 시스템 칸)→다음 단계</td>
+<td>구현됨 [검증됨: <code>TutorialScreen</code>, <code>TUTORIAL_STEPS</code>]</td>
+</tr>
+<tr>
+<td>세이브 슬롯 (StartScreen)</td>
+<td>진행 저장/이어하기</td>
+<td>3개 슬롯 중 선택</td>
+<td>슬롯 선택→저장된 층수/하이스코어 표시</td>
+<td>구현됨 [검증됨: <code>SAVE_SLOT_KEYS</code> 3개, <code>saveGame/loadGame</code>]</td>
+</tr>
+<tr>
+<td>언락 조건 관리</td>
+<td>메타 진행 게이팅</td>
+<td>5개 언락 항목 확인</td>
+<td>층 통과/보스 처치 수 누적→조건 충족 시 해금</td>
+<td>구현됨 [검증됨: <code>UNLOCK_CONDITIONS</code>, 컴포넌트 내 <code>floor&gt;=5/10/20</code>, <code>bossCount&gt;=1/5</code> 분기]</td>
+</tr>
+</tbody></table></div>
+<h2>8. 콘텐츠 (코드로 검증된 수치만 기재)</h2>
+<h3>8.1 검술 유파 (5개) [검증됨: <code>swordSchools.json</code> + <code>tests/sword-schools.test.cjs</code>]</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>id</th>
+<th>이름</th>
+<th>보너스 요약</th>
+<th>계승명</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>default</td>
+<td>균형검</td>
+<td>기본 능력치 유지</td>
+<td>균형검의 검혼</td>
+</tr>
+<tr>
+<td>assassin</td>
+<td>암영검</td>
+<td>민첩 +10, 투척 단검 2개로 시작(<code>throwing_dagger</code>×2 + 기본 치유 물약)</td>
+<td>암영검의 잔영</td>
+</tr>
+<tr>
+<td>magic_start</td>
+<td>비전검</td>
+<td>시작 마법 2개(랜덤, 서로 다른 스펠)</td>
+<td>비전검의 잔향</td>
+</tr>
+<tr>
+<td>arcane</td>
+<td>주술검</td>
+<td>MP 45→70, strength -5</td>
+<td>주술검의 맹세</td>
+</tr>
+<tr>
+<td>tank</td>
+<td>철벽검</td>
+<td>HP 90→110, armor +15, agility -8</td>
+<td>철벽검의 흔적</td>
+</tr>
+</tbody></table></div>
+<p>기본 시작 스탯(공통 base, <code>createPlayer</code>): HP 90/MP 45/스테미나 22, 인벤토리 <code>치유 물약(회복 25)</code> + <code>단검 던지기(피해 12, 사거리 4)</code>, 시작 마법 1개(6종 중 랜덤), 시작 칭호 <code>novice</code>(신참자) 장착 [검증됨].</p>
+<h3>8.2 메인 행동 5종 / 서브 행동 [검증됨: <code>SUB_ACTIONS</code>]</h3>
+<ul>
+<li>공격 3종: 세로 베기, 가로 베기, 찌르기 (+ 밀착(거리 0) 전용 4번째 옵션 <code>뒤로 베기</code>가 UI에서 조건부로 추가됨 [검증됨: 컴포넌트 3108행 <code>distance === 0</code>일 때만 추가])</li>
+<li>방어 3종: 세로 막기, 올려막기, 가로 막기</li>
+<li>이동 4종: 전진 압박(거리 -1), 후퇴(거리 +1), 위로 이동, 아래로 이동</li>
+<li>마법 사용 6종: 화염 쇄도, 암흑 속박, 회복술, 빙결 창, 번개 일격, 바람 쇄도</li>
+<li>아이템 사용 2종(기본): 치유 물약, 단검 던지기 (+보상으로 획득 시 폭발 물약/강화 단검/대형 치유 물약 추가 가능)</li>
+<li>전체 서브 액션은 정확히 1:1 완전 카운터 관계로 정의되어 있다(<code>PERFECT_COUNTER</code>, 총 21개 키) [검증됨].</li>
+</ul>
+<h3>8.3 주사위/피해 공식 핵심 수치 [검증됨: <code>resolveTurn</code>, <code>getDiceCount</code>, <code>rollContest</code>]</h3>
+<ul>
+<li>주사위 수: 상대 스탯 비율(ratio) 기준 — ratio≥2.0→4주사위, ≥1.4→3, ≥0.9→2, 미만→1.</li>
+<li>속도 승리 시 배율: 승자 ×1.2, 패자 ×0.85.</li>
+<li>힘싸움 승리 시 배율: margin≥4면 ×1.5/×0.65, 그 외 ×1.25/×0.8.</li>
+<li>마법 판정: 2주사위 합, 임계값 6 이상 성공, 10 이상이면 배율 1.3.</li>
+<li>거리 보너스(<code>distanceBonus</code>): 공격은 거리≤2에서 ×1.25, 거리≥4에서 ×0.70; 마법은 거리≤2에서 ×0.70, 거리≥4에서 ×1.25; 방어는 거리 1에서 ×1.15.</li>
+<li>컨디션 배율(<code>getConditionMultiplier</code>): 최상 ×1.10, 좋음 ×1.05, 보통 ×1.00, 나쁨 ×0.92, 최악 ×0.82. 굴림 확률: 최상 10%, 좋음 20%, 보통 30%, 나쁨 22%, 최악 18%(<code>rollCondition</code> 누적 구간 기준 계산값) [검증됨].</li>
+<li>스테미나 변화량(<code>getStaminaDelta</code>): 이동 +10, 방어 +4, 공격 -13, 마법 -8, 아이템 -6.</li>
+<li>부상 확률(<code>rollInjury</code>): 피해/최대체력 비율 0.50 이상 → 60% 확률, 0.25 이상 → 30% 확률로 팔/다리/몸통 중 1개 부상(부위 우선순위: 미부상 부위 우선, 재부상 시 severity가 minor→major로 악화).</li>
+<li>부상 패널티: 팔 부상은 strength에 minor ×0.80/major ×0.65, 다리 부상은 agility에 동일 배율, 몸통 부상은 턴당 스테미나 -3(minor)/-6(major).</li>
+</ul>
+<h3>8.4 적(Enemy Template) 12종 [검증됨: <code>ENEMY_TEMPLATES</code> 배열 직접 카운트]</h3>
+<p>비보스 8종: 검사 연습생(1<del>3층), 검사 전사(2</del>5층), 검사 마법사(4<del>7층), 검사 기사(3</del>7층), 검사 방랑자(4<del>8층), 검사 결투사(6</del>99층), 검사 집행관(8<del>15층), 검사 마도사(11</del>99층).
+보스 4종(5의 배수 층에서만 등장): 검사 대장(5<del>9층, 패턴 <code>wrath</code>), 검사 원로(10</del>99층, 패턴 <code>riposte</code>), 검사 심판관(15<del>29층, 패턴 <code>judge</code>), 검사 왕(30</del>99층, 패턴 <code>king</code>, &quot;HP 0 도달 시 절반 HP로 부활&quot;하는 2페이즈 보스 — 설명 문자열 기준, 2페이즈 로직 자체의 세부 구현은 컴포넌트 쪽 처리로 이관되어 있어 본 파일에서는 <strong>[미검증]</strong>).
+보스별 AI 패턴 보정(<code>generateEnemyIntent</code>): wrath는 HP 50% 이하에서 공격 가중치 ×2, riposte는 플레이어가 방어 시 이동/마법 가중치 대폭 상승, judge는 플레이어 직전 메인 행동의 카운터 행동 가중치 +80 [검증됨].</p>
+<h3>8.5 장비 3티어 [검증됨: <code>EQUIPMENT_POOL</code>(6종), <code>EQUIPMENT_POOL_T2</code>(6종), <code>EQUIPMENT_POOL_T3</code>(5종)]</h3>
+<ul>
+<li>티어 선택 기준(<code>getRewardEquipment</code>): 13층 이상 T3, 6층 이상 T2, 그 미만 T1.</li>
+<li>원소 시너지 6종(<code>SYNERGY_DEFINITIONS</code>): 화염 지배자(마법피해+25%), 신속의 무희(agility+10/투척+15%), 철의 요새(armor+12/strength+5), 암흑 자객(critChance+15), 바람의 춤꾼(agility+8/마법피해+15%), 빙왕(strength+8/armor+8) — 각 태그 장비/칭호 2개 이상 보유 시 발동.</li>
+</ul>
+<h3>8.6 칭호(Title) — 고정 6종 + 전투 후 동적 생성 [검증됨: <code>TITLES_DATA</code>, <code>generateCombatTitles</code>]</h3>
+<p>고정: 신참자(초기 장착), 무기 파괴자(완벽 방어 10회), 탑 등반가(5층 돌파), 보스 사냥꾼(보스 처치), 비전 연구자(10층 돌파), 생존자(생명력 1개로 승리).
+전투 후 랜덤 3개 제공: 격파자(strength 보너스)/신속·날렵(agility 보너스)/철벽·방어 격파자(armor 보너스)/속성 계승자(critChance 보너스) 4종 상시 + 보스전이면 &#39;보스 처치자&#39;(strength+8/agility+5/critChance+5) 추가, 그중 3개를 랜덤으로 노출.</p>
+<h3>8.7 언락(해금) 조건 5종 [검증됨: <code>UNLOCK_CONDITIONS</code> + 컴포넌트 임계값 일치 확인]</h3>
+<ul>
+<li>암살자(암영검) 빌드 해금: 5층 돌파.</li>
+<li>이중 마법사(비전검) 빌드 해금: 첫 보스 처치.</li>
+<li>비전술사(주술검) 빌드 해금: 10층 돌파.</li>
+<li>철벽 기사(철벽검) 빌드 해금: 20층 돌파.</li>
+<li>하드 모드 해금: 보스 5마리 처치(적 스탯 전체 +20%, 보상 장비 티어 +1).</li>
+</ul>
+<h3>8.8 층 이벤트 발생 규칙 [검증됨: <code>shouldTriggerEvent</code>]</h3>
+<p>1층 이하 없음, 5의 배수 층(보스 층)에는 이벤트 없음, 그 외 3의 배수 층에서만 발생. 이벤트 종류 4종(쉼터/행상/폐허/맹세) 중 HP 40% 미만이면 쉼터 가중치를 2배로 두고 랜덤 선택.</p>
+<h3>8.9 세이브/진행 구조 [검증됨]</h3>
+<p>3개 세이브 슬롯(<code>SAVE_SLOT_KEYS</code>), 층별 유령(<code>FLOOR_GHOST_KEY</code>) 저장으로 사망한 캐릭터가 해당 층에서 다시 등장, 튜토리얼 완료 플래그, 하이스코어 별도 저장.</p>
+<h2>콘텐츠 제공 방식</h2>
+<p>본 게임의 콘텐츠는 새로운 메커닉을 도입하지 않고, 위 8장에서 이미 코드로 검증된 체계를 조합하여 제공된다.</p>
+<ul>
+<li><strong>순서</strong>: 콘텐츠는 층수 기반으로 순차 제공된다. 5의 배수 층마다 보스가 등장하고(8.4절), 1층·5의 배수 층을 제외한 3의 배수 층에서만 층 이벤트가 순서대로 배치된다(8.8절).</li>
+<li><strong>해금</strong>: 5개 검술 유파 중 4개(암영검/비전검/주술검/철벽검)와 하드 모드는 층 돌파·보스 처치 수에 따라 순차적으로 해금된다(8.7절 <code>UNLOCK_CONDITIONS</code>).</li>
+<li><strong>보상</strong>: 전투 승리 시 장비·아이템·칭호 보상이 롤링 방식으로 제공되며(8.5절 보상 화면, 8.6절 칭호 6종+동적 생성), 장비 티어는 층수 임계값(6층/13층)에 따라 자동 상향된다.</li>
+<li><strong>변형</strong>: 동일한 콘텐츠라도 5개 검술 유파(8.1절)에 따라 시작 능력치·인벤토리·마법 슬롯이 달라지는 빌드 변형이 존재하며, 장비도 T1/T2/T3 티어별 변형(8.5절)과 원소 시너지 6종에 따른 변형이 발생한다.</li>
+</ul>
+<h2>9. 세션 길이별 경험</h2>
+<ul>
+<li><strong>30초</strong>: 턴 1회 — 적 의도 확률 힌트를 보고 메인/서브 행동을 선택, 3단계 주사위 결과와 데미지·상태 텍스트를 즉시 확인한다 [검증됨: <code>resolveTurn</code> 1회 호출 흐름].</li>
+<li><strong>5분</strong>: 한 개 층의 전투 1~2회 + 보상 선택 1회, 3의 배수 층이면 층 이벤트 선택 1회까지 포함 [검증됨: 구조 근거].</li>
+<li><strong>30분</strong>: 여러 층을 등반하며 장비 시너지·부상 누적·컨디션 변동을 관리, 5층/10층 단위로 언락 조건과 보스 조우를 통과 [검증됨: 언락 임계값·보스 층 규칙 근거].</li>
+<li><strong>장기(다회차)</strong>: 사망 후 레거시 캐릭터/유령 시스템으로 이전 회차 흔적을 다음 회차에서 마주치고, 5종 유파 전부와 하드 모드를 해금해가는 메타 진행 [검증됨: <code>generateEnemy</code>의 <code>legacyCharacters</code>/<code>floorGhosts</code>, <code>UNLOCK_CONDITIONS</code>].</li>
+</ul>
+<h2>10. 재미 사슬</h2>
+<p>재미 요소(완전 카운터 판단) → 트리거(적 의도 확률 힌트 노출) → 플레이어 판단/행동(서브 액션 선택으로 카운터를 노리거나 안전한 선택 회피) → 즉각 피드백(주사위 결과 + 단계별 전투 피드백 큐: windup/hit-result/dodge-success/damage-response, <code>getCombatFeedbackCues</code> [검증됨]) → 반복 동기(보상 3종 롤 + 칭호/장비 시너지 확인 → 다음 턴·다음 층에 재도전).</p>
+<h2>11. 실제 플레이 예시 (2개 이상)</h2>
+<p><strong>예시 1 — 근접 카운터전</strong>: 거리 2, 플레이어 HP 60/90, 스테미나 여유. 적 의도 확률 힌트가 &quot;공격 55%&quot;로 표시됨. 플레이어가 &#39;공격&#39;→&#39;가로 베기&#39;를 선택(가로 베기의 완벽 카운터는 세로 막기이므로, 적이 세로 베기를 낼 것을 예측). 적이 실제로 &#39;세로 베기&#39;를 냄 → <code>getMatchQuality</code>가 <code>perfect</code> 판정(플레이어의 서브가 적 서브를 카운터) → 힘싸움 주사위 +1개, 크리티컬 조건 충족 시 &quot;🔥크리티컬!&quot; 메시지와 함께 큰 피해 [검증됨: <code>getMatchQuality</code>, <code>resolveTurn</code>의 quality===&#39;perfect&#39; 처리, <code>isCritical</code> 조건].</p>
+<p><strong>예시 2 — 거리 관리와 마법 피격</strong>: 거리 4(원거리), 플레이어가 MP 여유로 &#39;마법 사용&#39;→&#39;번개 일격&#39; 선택. 2주사위 합이 11(≥10) → 마법 강화 성공(배율 1.3), 원거리 보너스(거리≥4 → ×1.25)까지 겹쳐 큰 피해 + 다음 턴 플레이어에게 <code>extra_speed_die</code> 효과 부여(⚡ 가속) [검증됨: <code>resolveTurn</code> 마법 분기, <code>번개 일격</code> 상태효과 처리].</p>
+<p><strong>예시 3 — 밀착 교전과 부상</strong>: 거리 0(동일 칸)이 되면 양측이 강제로 교전한다(회피 불가, &quot;⚔ 밀착 교전!&quot; 메시지). 이때 플레이어는 &#39;뒤로 베기&#39;(밀착 전용, 후퇴하며 공격 + 적 밀어냄)를 선택할 수 있다. 큰 피해를 받아 데미지/최대체력 비율이 0.5 이상이면 60% 확률로 부상이 발생하고, 이후 전투에서 해당 부위 스탯이 지속적으로 감소한다 [검증됨: <code>distance === 0</code> 강제 교전 블록, <code>뒤로 베기</code> UI 조건, <code>rollInjury</code>].</p>
+<h2>12. 피로/실패 요소 및 완화 방안</h2>
+<ul>
+<li><strong>피로 요소</strong>: 부상 누적(팔/다리/몸통 각 minor→major 악화), 스테미나·컨디션에 따른 스탯 페널티(<code>getEffectiveStats</code>의 hpFactor/staminaFactor 페널티, 최대 25%까지 스탯 저하), 힘싸움 패배 시 방어를 선택했어도 더 크게 맞는 역이용 페널티(×1.1) [검증됨].</li>
+<li><strong>완화 방안(구현됨)</strong>: 층 이벤트 &#39;검사의 쉼터&#39; 선택지에서 HP 30% 회복 또는 부상 1개 치료 가능, 아이템(치유 물약 25/대형 치유 물약 50), 회복술 마법(15 회복) [검증됨].</li>
+<li><strong>완화 방안(제안, 미구현)</strong>: 부상이 3개 이상 누적된 경우 강제 회복 이벤트 확률 상승, 컨디션 &#39;최악&#39; 연속 시 다음 판정에 소폭 보정치 부여 등은 이번 조사에서 코드 근거를 찾지 못했으므로 **[제안]**으로만 남긴다.</li>
+</ul>
+<h2>13. 경제/성장/밸런스 레버</h2>
+<ul>
+<li>층 이벤트 &#39;행상&#39;에서 HP를 지불해 agility+8 또는 armor+10을 구매하는 HP-스탯 트레이드오프 [검증됨].</li>
+<li>&#39;폐허&#39; 이벤트는 50%/60% 확률의 도박형 성장(성공 시 strength+10 또는 critChance+12, 실패 시 HP 20% 손실 또는 컨디션 최악) [검증됨].</li>
+<li>&#39;맹세&#39; 이벤트는 확정적 대량 성장(strength/agility, 층수에 비례) 대신 현재 HP를 절반으로 깎는 레버 [검증됨].</li>
+<li>장비 티어(T1/T2/T3)는 층수 임계값(6층, 13층)으로 자동 상향되어 후반 전투의 기본 파워 곡선을 조정 [검증됨].</li>
+<li>하이스코어 기반 시작 보너스: <code>createPlayer</code>가 <code>highScore*0.1</code>만큼 시작 스탯에 가산 — 이전 회차 최고 기록이 다음 회차 시작점을 완만하게 밀어올리는 메타 성장 레버 [검증됨].</li>
+</ul>
+<h2>14. 30초/5분/30분/장기 세션 및 온보딩·UI/HUD 5가지 상태</h2>
+<h3>14.1 온보딩</h3>
+<ul>
+<li>튜토리얼(<code>TutorialScreen</code>)은 &quot;세계관&quot; 2단계 + &quot;시스템 가이드&quot; N단계로 구성되며, 진행바가 세계관(노란색)과 시스템 가이드(파란색) 구간을 시각적으로 구분한다 [검증됨: 코드 직접 열람].</li>
+<li>튜토리얼 완료 여부는 <code>localStorage</code>(<code>swordmasters-ascent-tutorial-done</code>)에 boolean으로 저장되어 재방문 시 스킵된다 [검증됨].</li>
+</ul>
+<h3>14.2 UI/HUD 5가지 핵심 상태 (GamePhase 기준, 코드에 정확히 6개 값 존재 — 요청된 5개 범주에 맞춰 통합 서술)</h3>
+<ol>
+<li><code>start</code> — 타이틀/세이브 슬롯 선택 화면.</li>
+<li><code>tutorial</code> / <code>naming</code> / <code>stat_roll</code> — 온보딩 및 캐릭터·유파 생성 단계(신규 유저 전용 도입부).</li>
+<li><code>battle</code> — 전투 중 HUD(체력/스테미나/MP/거리·행 그리드/적 의도 힌트/주사위 결과).</li>
+<li><code>reward</code> — 전투 후 장비/아이템/칭호 보상 선택 화면.</li>
+<li><code>event</code> — 층 이벤트(쉼터/행상/폐허/맹세) 선택 화면.</li>
+<li><code>gameover</code> — 결과 화면(재시작 선택).
+[검증됨: <code>GamePhase</code> 타입 정의 및 컴포넌트의 <code>phase === &#39;...&#39;</code> 분기 전체 확인]</li>
+</ol>
+<h3>14.3 접근성 및 오디오비주얼</h3>
+<ul>
+<li>청각 리소스가 실제로 존재한다: <code>public/assets/audio/generated/</code>에 <code>.ogg</code> 파일 8개(결과 성공 <code>result_success</code>, 결과 실패 <code>result_failure</code>, 액션 <code>action_primary</code>, UI 클릭 <code>ui_click</code>, 위험 경고 <code>danger_warning</code>, 회복 <code>recovery</code>, 전환 <code>transition</code> 등 효과음 7종 + 배경음악 루프 <code>bgm_loop</code> 1종)가 Kenney 라이선스 텍스트와 함께 존재 [검증됨: 파일 목록 직접 확인, 개수 재검증].</li>
+<li>전투 피드백은 색상뿐 아니라 톤(tone)·사운드 큐(soundCue)·이펙트(effect) 필드로 구분된다(<code>hit-result</code>→slash-flash/slash 사운드, <code>dodge-success</code>→afterimage-step/whoosh, <code>growth-result</code>→aura-rise/chime) [검증됨: <code>tests/combat-feedback.test.cjs</code>].</li>
+<li>컨디션 표시는 텍스트 라벨(최상/좋음/보통/나쁨/최악) + 색상(<code>CONDITION_COLORS</code>)을 병행하여 색약 사용자도 텍스트로 상태를 구분할 수 있다 [검증됨].</li>
+<li>키 리매핑, 텍스트 크기 조절 등 별도 접근성 옵션 메뉴의 구현 여부는 이번 조사에서 코드 근거를 찾지 못했다 — <strong>[미검증]</strong>.</li>
+</ul>
+<h3>14.4 100개 이상 데이터 / 3배 긴 텍스트 대응</h3>
+<ul>
+<li>현재 콘텐츠 규모(적 템플릿 12종, 장비 3티어 합계 17종, 칭호 풀 소수)는 100개 미만이라 가상 스크롤/페이지네이션이 코드에서 발견되지 않았다 — 해당 대응은 **[미검증/미구현]**이며, 콘텐츠가 향후 100종 이상으로 늘어날 경우 별도 검토가 필요하다는 점만 **[제안]**으로 남긴다.</li>
+</ul>
+<h2>15. 구현됨 vs 계획됨 vs 제안</h2>
+<p>(구현됨 / 계획됨 / 제안 기준으로 아래 항목을 분류함)</p>
+<p><strong>구현됨 [검증됨]</strong></p>
+<ul>
+<li>5개 검술 유파, 5종 메인 행동과 하위 서브 액션 전체, 완전 카운터 표, 3단계 주사위 판정(속도/힘싸움/마법), 거리+행 이중 그리드, 부상 시스템, 12종 적 템플릿과 4종 보스 패턴, 장비 3티어 및 6종 시너지, 칭호(고정 6+동적 생성), 층 이벤트 4종, 5종 언락 조건, 3슬롯 세이브, 레거시/유령 캐릭터, 단계별 전투 피드백 큐, 튜토리얼 온보딩, 오디오 에셋 7종.</li>
+</ul>
+<p><strong>계획됨(문서상 존재하나 세부 구현 확인 못함, [미검증])</strong></p>
+<ul>
+<li><code>docs/superpowers/plans/</code>의 combat-depth, floor-events, meta-progression, injury-system, vfx-enhancement 5개 계획 문서 및 <code>docs/superpowers/specs/2026-05-13-combat-hud-redesign-design.md</code> — 파일 존재는 확인했으나 최신 코드와의 반영 여부·세부 내용은 본 회차 조사 범위를 벗어나 미검증.</li>
+<li>보스 &#39;검사 왕&#39;의 2페이즈 부활 로직 세부 구현(설명 문자열은 확인, 실제 트리거 코드는 컴포넌트 다른 위치에 있어 미확인).</li>
+</ul>
+<p><strong>제안(신규, 미구현) [제안]</strong></p>
+<ul>
+<li>부상 3개 이상 누적 시 강제 회복 이벤트 확률 상승.</li>
+<li>컨디션 &#39;최악&#39; 연속 시 소폭 보정치 부여로 좌절 방지.</li>
+<li>콘텐츠가 100종 이상으로 확장될 경우를 대비한 목록 UI 가상 스크롤.</li>
+</ul>
+<h2>성공 KPI [제안]</h2>
+<p>아래 KPI는 실제 텔레메트리로 검증된 것이 아니라, 검증된 시스템(전투 피드백 큐, 온보딩 튜토리얼, 유파 빌드 다양성, 레거시/유령 기반 재방문 진행)을 근거로 이번 문서에서 새로 제안하는 지표다. 전부 <strong>[제안]</strong>.</p>
+<ol>
+<li><strong>전투 판단 체감(3분 리텐션)</strong> [제안] — 튜토리얼 완료 후 첫 3개 층 전투를 끝까지 진행하는 비율 70% 이상.</li>
+<li><strong>유파 빌드 다양성</strong> [제안] — 5개 검술 유파 중 최초 선택 유파 쏠림이 40%를 넘지 않도록 분포 균형(각 유파 선택 비중 10~30% 범위 유지).</li>
+<li><strong>재도전/장기 진행률</strong> [제안] — 사망 후 동일 세이브 슬롯으로 재도전하여 이전 최고 층수를 갱신하는 세션 비율 30% 이상(레거시/유령 시스템 및 하이스코어 보너스 효과 확인용).</li>
+<li><strong>세션 길이 분포</strong> [제안] — 30초~5분 사이의 짧은 세션 비율과 30분 이상 장기 세션 비율을 모두 추적하여, 어느 한쪽으로 극단적으로 쏠리지 않는지(각 20% 이상) 확인.</li>
+<li><strong>해금 콘텐츠 도달률</strong> [제안] — 전체 플레이어 중 언락 조건 5종(8.7절) 중 최소 1개 이상을 해금하는 비율 50% 이상.</li>
+</ol>
+<h2>16. 다음 우선순위 (3가지)</h2>
+<ol>
+<li><strong>전투 피드백 완결성 검증</strong> — <code>combat-feedback.test.cjs</code>가 커버하는 큐 체계가 실제 배틀 화면(<code>DicePanel</code> 등)에 100% 반영되는지 수동 플레이로 재확인하고, 남은 수동 QA 갭을 <code>docs/next_improvement_instruction.md</code> 후속 항목으로 기록한다.</li>
+<li><strong>온보딩 3분 루프 명료화</strong> — 튜토리얼 이후 첫 실전 층에서 다음 등반 목표/보상 선택/성장 결과가 한 화면에서 즉시 이해되는지 검증(요청 문서 Instruction 2 대응).</li>
+<li><strong>런타임 비주얼 자산 감사 마무리</strong> — 전투에 노출되는 코드-드로우 아트/SVG 의존을 비트맵 자산으로 교체하는 작업의 잔여 범위를 확인(요청 문서 Instruction 3 대응).</li>
+</ol>
+<p>이 우선순위는 <code>docs/next_improvement_instruction.md</code>에 명시된 미해결/후속 항목을 근거로 한 것이며, 현재 프로젝트의 새로운 최우선 과제를 재조사한 결과는 아니다 [검증됨: 원본 지침 파일 근거].</p>
+<hr>
+<h2>근거 노트 (Evidence Note)</h2>
+<p>이번 개정에서 실제로 열람하여 근거로 사용한 구현 파일:</p>
+<ul>
+<li><code>C:\Development\1_TOS\swordmasters-ascent\package.json</code> (버전 1.7.1 확인)</li>
+<li><code>C:\Development\1_TOS\swordmasters-ascent\src\lib\gameData.ts</code> (전체 1882줄, 게임 규칙/수치의 1차 근거)</li>
+<li><code>C:\Development\1_TOS\swordmasters-ascent\src\lib\swordSchools.json</code> (5개 유파 정의)</li>
+<li><code>C:\Development\1_TOS\swordmasters-ascent\src\components\SwordmastersAscent.tsx</code> (일부 발췌: GamePhase 분기, 세이브 슬롯, 튜토리얼, 뒤로 베기 UI 조건, 언락 임계값)</li>
+<li><code>C:\Development\1_TOS\swordmasters-ascent\tests\sword-schools.test.cjs</code></li>
+<li><code>C:\Development\1_TOS\swordmasters-ascent\tests\combat-feedback.test.cjs</code> (테스트 11개 직접 카운트 재검증)</li>
+<li><code>C:\Development\1_TOS\swordmasters-ascent\package.json</code> (버전 1.7.1 재확인, 스크립트/의존성 열람)</li>
+<li><code>gameData.ts</code> 내 <code>ENEMY_TEMPLATES</code>(12개), <code>EQUIPMENT_POOL</code>/<code>_T2</code>/<code>_T3</code>(6/6/5개), <code>TITLES_DATA</code>(6개), <code>UNLOCK_CONDITIONS</code>(5개), <code>SYNERGY_DEFINITIONS</code>, <code>PERFECT_COUNTER</code> 정의부를 이번 회차에 재열람하여 8~11장 수치를 재검증함</li>
+<li>존재만 확인하고 본문은 열람하지 않은 파일(테스트 파일명 근거): <code>tests\release-names.test.cjs</code>, <code>tests\game-audio-layer.test.cjs</code>, <code>tests\gameAudioLayer.test.cjs</code>, <code>tests\battle-grid-wide-v002.test.cjs</code></li>
+<li>존재만 확인한 문서: <code>docs\superpowers\plans\*.md</code>(5개), <code>docs\superpowers\specs\2026-05-13-combat-hud-redesign-design.md</code>, <code>docs\superpowers\plans\2026-05-14-combat-hud-redesign.md</code>, <code>docs\next_improvement_instruction.md</code>(본문 열람함), <code>docs\SwordMastersAscent_업데이트_내역서.md</code>(본문 열람함)</li>
+<li>오디오 에셋 실재 확인: <code>public\assets\audio\generated\*.ogg</code> 8개 파일(디렉터리 재열람으로 개수 정정: 7 → 8, <code>bgm_loop.ogg</code> 누락분 반영) + 라이선스 텍스트 3개</li>
+</ul>
+<p><strong>이번 회차(문서 버전 2.1) 변경 요약</strong>: v2.0 대비 신규 조사·재작성이 아니라 정확성 검증 패스임. <code>gameData.ts</code>, <code>combat-feedback.test.cjs</code>, 오디오 에셋 디렉터리를 재열람하여 두 건의 수치 오류를 발견·정정함 — (1) 4장 가설 2의 전투 피드백 테스트 개수 7→11개, (2) 14.3장 오디오 파일 개수 7→8개(효과음 7종 + BGM 루프 1종). 그 외 콘텐츠 수치(유파 5, 메인 행동 5, 서브 액션 21, 적 템플릿 12, 장비 3티어 17종, 시너지 6, 칭호 고정 6, 언락 5)는 코드 재열람으로 기존 기재값과 일치함을 확인함.</p>
+<p><strong>검증됨 vs 제안 요약</strong>: 본 문서의 8<del>11장(콘텐츠 수치, 세션 흐름, 재미 사슬, 플레이 예시)은 전량 위 코드 파일에서 직접 확인한 수치/로직에 근거한다. 12</del>15장 중 &quot;제안&quot; 표기 항목은 코드에 존재하지 않으며, 이번 회차에서 새로 제시하는 설계 아이디어임을 명시한다. 레퍼런스 분석(5장)과 계획 문서 세부 내용(15장 &quot;계획됨&quot; 항목)은 파일 존재만 확인했고 본문 내용은 검증하지 못했으므로 인용을 자제했다.</p>
+
+</main>
 </body>
 </html>
