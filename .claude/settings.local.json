@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node:*)",
+      "Bash(grep -v \"//\")",
+      "Bash(C:/Users/오진우/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/brainstorming/scripts/start-server.sh --project-dir C:/Development/1_TOS/swordmasters-ascent)",
+      "Bash(pkill -f \"start-server\")"
+    ]
+  }
+}

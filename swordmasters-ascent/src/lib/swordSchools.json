@@ -1,0 +1,37 @@
+[
+  {
+    "id": "default",
+    "name": "균형검",
+    "description": "균형 잡힌 검술로 어떤 상황에도 대응합니다.",
+    "bonusSummary": "기본 능력치 유지 / 안정적인 시작",
+    "legacyName": "균형검의 검혼"
+  },
+  {
+    "id": "assassin",
+    "name": "암영검",
+    "description": "민첩과 투척으로 빈틈을 찌르는 검술입니다.",
+    "bonusSummary": "민첩 +10 / 투척 단검 추가",
+    "legacyName": "암영검의 잔영"
+  },
+  {
+    "id": "magic_start",
+    "name": "비전검",
+    "description": "검과 마법을 함께 다루는 변칙 유파입니다.",
+    "bonusSummary": "시작 마법 2개",
+    "legacyName": "비전검의 잔향"
+  },
+  {
+    "id": "arcane",
+    "name": "주술검",
+    "description": "마법 자원을 크게 확보하는 대신 힘을 덜어냅니다.",
+    "bonusSummary": "MP 70 / 힘 -5",
+    "legacyName": "주술검의 맹세"
+  },
+  {
+    "id": "tank",
+    "name": "철벽검",
+    "description": "방어와 체력으로 버티며 반격을 노리는 검술입니다.",
+    "bonusSummary": "HP 110 / 방어 +15 / 민첩 -8",
+    "legacyName": "철벽검의 흔적"
+  }
+]
