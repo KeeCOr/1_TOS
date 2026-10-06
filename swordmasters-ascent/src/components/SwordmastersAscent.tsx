@@ -1,5 +1,6 @@
 ﻿'use client';
 
+import Image from 'next/image';
 import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import {
   ActionType, SubAction, Character, FloatingText, GamePhase,
@@ -22,6 +23,7 @@ import {
   StartBuild, SWORD_SCHOOLS, getSwordSchool,
 } from '@/lib/gameData';
 import { getCombatFeedbackCues } from '@/lib/combatFeedback.cjs';
+import { playCombatSound } from '@/lib/combatAudio';
 import { getTacticalRisk } from '@/lib/tacticalRisk.cjs';
 import { getMomentumReward } from '@/lib/momentumRules.cjs';
 
@@ -1679,6 +1681,19 @@ function DicePanel({ result, rolling, playerName, enemyName }: {
   const isMiss     = result.quality === 'miss';
   const isCrit     = result.isCritical;
   const combatFeedbackCues = getCombatFeedbackCues(result, rolling);
+  const playedResultCue = useRef(false);
+  const resultCue = combatFeedbackCues.find((cue: { soundCue?: string }) => cue.soundCue)?.soundCue;
+
+  useEffect(() => {
+    if (rolling) {
+      playedResultCue.current = false;
+      return;
+    }
+    if (!playedResultCue.current && resultCue) {
+      playCombatSound(resultCue);
+      playedResultCue.current = true;
+    }
+  }, [resultCue, rolling]);
 
   return (
     <div className="space-y-2">
@@ -2222,6 +2237,7 @@ function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial }: {
 }) {
   const [metas, setMetas] = useState<ReturnType<typeof getAllSlotMetas>>([null, null, null]);
   const [confirm, setConfirm] = useState<{ slot: number; mode: 'delete' | 'new' } | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
 
   useEffect(() => { setMetas(getAllSlotMetas()); }, []);
 
@@ -2252,9 +2268,21 @@ function StartScreen({ highScore, onSelectSlot, onNewGame, onTutorial }: {
       <div className="flex flex-col items-center pt-16 pb-8">
         <div className="text-7xl mb-4" style={{ filter: 'drop-shadow(0 0 16px rgba(251,191,36,0.8))' }}>⚔️</div>
         <p className="text-yellow-400 text-xs tracking-[0.4em] uppercase mb-2">Tower of Swords</p>
-        <h1 className="text-4xl font-black text-yellow-300 tracking-wider" style={{ textShadow: '0 0 24px rgba(251,191,36,0.5)' }}>
-          T of Sword
-        </h1>
+        {logoFailed ? (
+          <h1 className="text-4xl font-black text-yellow-300 tracking-wider" style={{ textShadow: '0 0 24px rgba(251,191,36,0.5)' }}>
+            T of Sword
+          </h1>
+        ) : (
+          <Image
+            src="/brand/title-logo.png"
+            alt="T of Sword"
+            width={960}
+            height={320}
+            priority
+            className="h-auto w-full max-w-md"
+            onError={() => setLogoFailed(true)}
+          />
+        )}
         <div className="flex items-center gap-3 mt-5">
           <div className="h-px w-20 bg-yellow-900" />
           <span className="text-yellow-600 text-sm">✦</span>

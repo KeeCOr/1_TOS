@@ -10,6 +10,7 @@ This list tracks the image assets needed for the 10-floor version of Swordmaster
 | `public/chars/player.png` | Player character | Existing |
 | `public/enemy/enemy.png` | Generic enemy fallback | Existing |
 | `public/next.svg` | UI icon | Existing |
+| `public/brand/title-logo.png` | "T OF SWORD" title-screen wordmark | Generated and applied |
 
 ## Required Character Assets
 
