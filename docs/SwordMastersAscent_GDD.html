@@ -80,5 +80,12 @@
 <li>근거: <code>src/lib/tacticalRisk.cjs</code>, <code>tests/tactical-risk.test.cjs</code>, <code>src/components/SwordmastersAscent.tsx</code>.</li>
 <li>검증: 2026-09-23 테스트 24/24와 Next.js 빌드 통과. 복수 lockfile 경고는 유지된다.</li>
 <li>미검증: 첫 3개 층의 모든 의도 조합에 대한 수동 시각 확인.</li>
+</ul></section>
+<section><h2>21. 2026-10-06 전투 피드백·검증 기준점 동기화</h2><ul>
+<li>구현 확인: 전투 피드백은 공격 전 준비, 명중·회피·피해·성장 결과를 서로 다른 화면 우선순위와 음향 큐로 구분한다. <code>combatFeedback</code>의 <code>stance</code>, <code>slash</code>, <code>heavy-slash</code>, <code>whoosh</code>, <code>air-cut</code>, <code>hit-low</code>, <code>guard</code>, <code>chime</code> 큐에 원본 합성 WAV가 연결돼 있다.</li>
+<li>실패 안전성: 브라우저가 최초 사용자 상호작용 전 재생을 제한하면 음향만 생략하고 시각 피드백과 턴 결과 UI는 계속 표시한다.</li>
+<li>구현 확인: 유파는 저장 호환성을 위해 고유 ID를 유지한 5개 선택지이며, 방어는 세로·가로 두 유형, 완벽 판정의 우세 결과는 다음 턴 보너스 후보를 만든다.</li>
+<li>검증: <code>npm test</code> 28개 테스트 통과, <code>npm run build</code> 통과(2026-10-06).</li>
+<li>알려진 경고: 상위와 프로젝트 내부의 복수 lockfile 때문에 Next.js가 workspace root 추정 경고를 낸다. 빌드는 통과했으며, 파일 삭제나 패키징 경로 변경은 이번 최신화 범위에 포함하지 않았다.</li>
 </ul></section></body>
 </html>
