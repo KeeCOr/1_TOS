@@ -1,0 +1,13 @@
+{
+  "project": "1_TOS",
+  "updated": "2026-10-18",
+  "audio": [
+    {
+      "role": "background music",
+      "runtime": "public\\audio\\bgm-player.js",
+      "asset": "public/audio/bgm_main_loop.ogg",
+      "source": "existing local asset",
+      "behavior": "one decoded loop after trusted gesture; retry; visibility suspend/resume"
+    }
+  ]
+}
