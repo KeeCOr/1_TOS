@@ -1,3 +1,4 @@
+import Script from "next/script";
 import type { Metadata } from "next";
 import "./globals.css";
 
@@ -13,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="h-full antialiased">
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">{children}<Script src="./audio/bgm-player.js" data-bgm-src="./bgm_main_loop.ogg" strategy="afterInteractive" /></body>
     </html>
   );
 }
