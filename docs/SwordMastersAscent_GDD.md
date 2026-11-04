@@ -1,5 +1,30 @@
 # SwordMastersAscent
 
+<!-- PORTFOLIO-GDD-20261104:START -->
+## 2026-11-04 구현 대조 및 GDD 현행화
+
+- **현재 제품 정의**: 주사위와 검술 행동 선택, 층별 성장으로 던전을 오르는 전술 로그라이트.
+- **핵심 경험 / 흐름**: 시작/유파·능력치 결정 → 공격·이동·방어·마법 선택 → 주사위/완벽 판정 결과 → 보상·이벤트 → 상위 층 또는 사망 회고.
+- **이번 확인 소스**: C:\work\project-resume\games-latest\1_TOS\swordmasters-ascent
+- **소스 버전**: 1.6.3
+- **확인 시 Git 기준**: codex/bgm-audio-20261018 / 3b92380921ebbb3c62383c481578f6d81729aaca
+- **현재 작업 상태**: 커밋되지 않은 변경 있음. 완료·원격 반영과 구분한다.
+- **이번 검증 범위**: 2026-11-04 문서·선택 소스·Git 메타데이터 읽기 확인. 제품 테스트·빌드 재실행 없음. 과거 PASS 날짜를 오늘로 갱신하지 않음.
+- **구현 / 문서 근거 [source_read_confirmed]**: 행동 종류 공격/이동/방어/마법/아이템, start/tutorial/naming/stat_roll/battle/reward/event/gameover 단계가 실제 gameData.ts에 정의된다.
+- **근거 파일**: C:/work/project-resume/games-latest/1_TOS/swordmasters-ascent/src/lib/gameData.ts
+- **구현 / 문서 근거 [existing_document_report]**: 5개 유파의 고유 ID와 세로·가로 방어, 완벽 판정 후 다음 턴 보너스를 문서가 현행 구현으로 보고한다.
+- **근거 파일**: C:/work/project-resume/games-latest/1_TOS/docs/SwordMastersAscent_GDD.md
+- **구현 / 문서 근거 [existing_document_report]**: 준비/명중/회피/피해/성장 피드백에 서로 다른 화면 우선순위와 WAV 큐를 연결했다는 2026-10-06 기록이 있다.
+- **근거 파일**: C:/work/project-resume/games-latest/1_TOS/docs/SwordMastersAscent_GDD.md
+- **이전 검증 기록 (이번 재실행 아님)**: 2026-10-06 npm test28개 및 Next production build 통과 기록; 이번 감사에서는 재실행하지 않음.
+- **미완료 / 제한**: 2026-11-04 추가점검 보고: /brand/title-logo.png404, 저장 슬롯 클릭 후 시작 화면에 머묾, footer1.6.2와 package1.6.3 불일치.
+- **미완료 / 제한**: 수동 첫3층·좁은 폭·사망 회고와 배포본 동일성은 미검증.
+- **다음 행동**: 로고 실제 참조와 시작 슬롯 이벤트를 먼저 복구·재현한 뒤 첫 전투와 층 진행을 확인한다.
+
+<!-- PORTFOLIO-GDD-20261104:END -->
+
+
+
 ## 2026-09-28 전투 턴 규칙과 정보 공개 원칙
 
 **턴 구조:** `적 의도 확인 → 무료 이동 0~1회 → 주 행동 1회 → 판정·피드백 → 다음 턴 보너스 확인`.
